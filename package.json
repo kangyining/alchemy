@@ -8,7 +8,13 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "deploy:dev": "npx cdk deploy alchemy-infra-dev --profile alchemy-dev",
+    "deploy:prod": "npx cdk deploy alchemy-infra-prod --profile alchemy-prod",
+    "diff:dev": "npx cdk diff alchemy-infra-dev --profile alchemy-dev",
+    "diff:prod": "npx cdk diff alchemy-infra-prod --profile alchemy-prod",
+    "synth:dev": "npx cdk synth alchemy-infra-dev --profile alchemy-dev",
+    "synth:prod": "npx cdk synth alchemy-infra-prod --profile alchemy-prod"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
