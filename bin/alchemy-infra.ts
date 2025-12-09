@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib/core';
 import { AlchemyInfraStack } from '../lib/alchemy-infra-stack';
 
 const app = new cdk.App();
+
 new AlchemyInfraStack(app, 'alchemy-infra-dev', {
   env: { account: '088332244851', region: 'us-east-1' },
 });
