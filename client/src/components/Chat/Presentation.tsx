@@ -61,7 +61,15 @@ export default function Presentation({ children }: { children: React.ReactNode }
   }, [artifactsVisibility, artifacts]);
 
   return (
-    <DragDropWrapper className="relative flex w-full grow overflow-hidden bg-presentation">
+    <DragDropWrapper
+      className="relative flex w-full grow overflow-hidden"
+      style={{
+        backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.9)), url(/assets/infinity-background.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+      }}
+    >
       <SidePanelGroup artifacts={artifactsElement}>
         <main className="flex h-full flex-col overflow-y-auto" role="main">
           {children}
