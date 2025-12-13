@@ -1,0 +1,10 @@
+services:
+  api:
+    image: elixir-chat:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - type: bind
+        source: ./librechat.yaml
+        target: /app/librechat.yaml
