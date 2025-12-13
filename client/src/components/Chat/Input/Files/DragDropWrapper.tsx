@@ -7,16 +7,17 @@ import { cn } from '~/utils';
 interface DragDropWrapperProps {
   children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export default function DragDropWrapper({ children, className }: DragDropWrapperProps) {
+export default function DragDropWrapper({ children, className, style }: DragDropWrapperProps) {
   const { isOver, canDrop, drop, showModal, setShowModal, draggedFiles, handleOptionSelect } =
     useDragHelpers();
 
   const isActive = canDrop && isOver;
 
   return (
-    <div ref={drop} className={cn('relative flex h-full w-full', className)}>
+    <div ref={drop} className={cn('relative flex h-full w-full', className)} style={style}>
       {children}
       {/** Always render overlay to avoid mount/unmount overhead */}
       <DragDropOverlay isActive={isActive} />
