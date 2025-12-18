@@ -110,7 +110,7 @@
   "com_auth_username_max_length": "Uživatelské jméno musí mít méně než 20 znaků",
   "com_auth_username_min_length": "Uživatelské jméno musí mít alespoň 2 znaky",
   "com_auth_verify_your_identity": "Ověřte svou identitu",
-  "com_auth_welcome_back": "Vítejte zpět",
+  "com_auth_welcome_to_brand": "Vítejte v {{appTitle}}",
   "com_click_to_download": "(klikněte zde pro stažení)",
   "com_download_expired": "(platnost stažení vypršela)",
   "com_download_expires": "(klikněte zde pro stažení - platnost vyprší {{0}})",

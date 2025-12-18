@@ -128,7 +128,7 @@
   "com_auth_username_max_length": "Käyttäjänimi voi olla enintään 20 merkkiä pitkä",
   "com_auth_username_min_length": "Käyttäjänimessä on oltava vähintään 2 merkkiä",
   "com_auth_verify_your_identity": "Varmista identiteettisi",
-  "com_auth_welcome_back": "Tervetuloa takaisin",
+  "com_auth_welcome_to_brand": "Tervetuloa {{appTitle}}",
   "com_citation_more_details": "Lisätietoa: {{label}}",
   "com_citation_source": "Lähde",
   "com_click_to_download": "(lataa napauttamalla tästä)",

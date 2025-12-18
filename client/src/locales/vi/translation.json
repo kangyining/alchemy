@@ -121,7 +121,7 @@
   "com_auth_username_max_length": "Tên người dùng phải ít hơn 20 ký tự",
   "com_auth_username_min_length": "Tên người dùng phải có ít nhất 2 ký tự",
   "com_auth_verify_your_identity": "Xác minh danh tính của bạn",
-  "com_auth_welcome_back": "Chào mừng trở lại",
+  "com_auth_welcome_to_brand": "Chào mừng đến với {{appTitle}}",
   "com_click_to_download": "(nhấp vào đây để tải xuống)",
   "com_download_expired": "(tải xuống đã hết hạn)",
   "com_download_expires": "(nhấp vào đây để tải xuống - hết hạn {{0}})",

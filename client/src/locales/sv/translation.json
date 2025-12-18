@@ -189,7 +189,7 @@
   "com_auth_username_max_length": "Användarnamnet får inte vara längre än 20 tecken",
   "com_auth_username_min_length": "Användarnamnet måste vara minst 2 tecken",
   "com_auth_verify_your_identity": "Verifiera din identitet",
-  "com_auth_welcome_back": "Välkommen tillbaka",
+  "com_auth_welcome_to_brand": "Välkommen till {{appTitle}}",
   "com_citation_more_details": "Mer information om {{label}}",
   "com_citation_source": "Källa",
   "com_click_to_download": "(klicka här för att ladda ner)",

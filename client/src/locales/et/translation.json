@@ -129,7 +129,7 @@
   "com_auth_username_max_length": "Kasutajanimi peab olema vähem kui 20 tähemärki",
   "com_auth_username_min_length": "Kasutajanimi peab olema vähemalt 2 tähemärki",
   "com_auth_verify_your_identity": "Kontrolli",
-  "com_auth_welcome_back": "Teretulemast tagasi",
+  "com_auth_welcome_to_brand": "Tere tulemast {{appTitle}}",
   "com_citation_more_details": "Rohkem üksikasju {{label}} kohta",
   "com_citation_source": "Allikas",
   "com_click_to_download": "(vajuta siia, et alla laadida)",
