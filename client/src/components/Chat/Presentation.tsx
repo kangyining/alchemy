@@ -75,13 +75,14 @@ export default function Presentation({ children }: { children: React.ReactNode }
   }, [artifactsVisibility, artifacts]);
 
   return (
-    <DragDropWrapper 
+    <DragDropWrapper
       className="relative flex w-full grow overflow-hidden"
       style={{
-        backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.85)), url(/assets/infinity-background.jpg)',
+        backgroundImage:
+          'linear-gradient(rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.85)), url(/assets/infinity-background.jpg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        backgroundAttachment: 'fixed'
+        backgroundAttachment: 'fixed',
       }}
     >
       <SidePanelProvider>

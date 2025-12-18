@@ -6,7 +6,7 @@ import AuthLayout from '~/components/Auth/AuthLayout';
 import { TranslationKeys, useLocalize } from '~/hooks';
 
 const headerMap: Record<string, TranslationKeys> = {
-  '/login': 'com_auth_welcome_back',
+  '/login': 'com_auth_welcome_to_brand',
   '/register': 'com_auth_create_account',
   '/forgot-password': 'com_auth_reset_password',
   '/reset-password': 'com_auth_reset_password',
@@ -58,7 +58,13 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
 
   return (
     <AuthLayout
-      header={headerText ? localize(headerText) : localize(headerMap[location.pathname])}
+      header={
+        headerText
+          ? localize(headerText)
+          : localize(headerMap[location.pathname], {
+              appTitle: startupConfig?.appTitle,
+            })
+      }
       isFetching={isFetching}
       startupConfig={startupConfig}
       startupConfigError={startupConfigError}

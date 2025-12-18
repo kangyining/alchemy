@@ -132,7 +132,7 @@
   "com_auth_username_max_length": "Brugernavn skal være mindre end 20 tegn",
   "com_auth_username_min_length": "Brugernavn skal være mindst 2 tegn",
   "com_auth_verify_your_identity": "Bekræft din identitet",
-  "com_auth_welcome_back": "Velkommen tilbage",
+  "com_auth_welcome_to_brand": "Velkommen til {{appTitle}}",
   "com_citation_more_details": "Flere detaljer om {{label}}",
   "com_citation_source": "Kilde",
   "com_click_to_download": "(klik her for at downloade)",
