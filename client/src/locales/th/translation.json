@@ -139,7 +139,7 @@
   "com_auth_username_max_length": "ชื่อผู้ใช้ต้องมีความยาวน้อยกว่า 20 ตัวอักษร",
   "com_auth_username_min_length": "ชื่อผู้ใช้ต้องมีอย่างน้อย 2 ตัวอักษร",
   "com_auth_verify_your_identity": "ยืนยันตัวตนของคุณ",
-  "com_auth_welcome_back": "ยินดีต้อนรับกลับ",
+  "com_auth_welcome_to_brand": "ยินดีต้อนรับสู่ {{appTitle}}",
   "com_citation_more_details": "รายละเอียดเพิ่มเติมเกี่ยวกับ {{label}}",
   "com_citation_source": "แหล่งที่มา",
   "com_click_to_download": "(คลิกที่นี่เพื่อดาวน์โหลด)",

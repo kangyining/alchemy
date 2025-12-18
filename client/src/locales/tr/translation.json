@@ -120,7 +120,7 @@
   "com_auth_username": "Kullanıcı adı (isteğe bağlı)",
   "com_auth_username_max_length": "Kullanıcı adı en fazla 20 karakter olmalıdır",
   "com_auth_username_min_length": "Kullanıcı adı en az 2 karakter olmalıdır",
-  "com_auth_welcome_back": "Tekrar hoş geldiniz",
+  "com_auth_welcome_to_brand": "{{appTitle}}'e hoş geldiniz",
   "com_click_to_download": "(indirmek için tıklayın)",
   "com_download_expired": "(indirme süresi doldu)",
   "com_download_expires": "(indirmek için tıklayın - {{0}} tarihinde sona eriyor)",

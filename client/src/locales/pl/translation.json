@@ -129,7 +129,7 @@
   "com_auth_username_max_length": "Nazwa użytkownika nie może zawierać więcej niż 20 znaków",
   "com_auth_username_min_length": "Nazwa użytkownika musi zawierać co najmniej 2 znaki",
   "com_auth_verify_your_identity": "Zweryfikuj swoją tożsamość",
-  "com_auth_welcome_back": "Witamy z powrotem",
+  "com_auth_welcome_to_brand": "Witamy w {{appTitle}}",
   "com_click_to_download": "(kliknij tutaj, aby pobrać)",
   "com_download_expired": "(pobieranie wygasło)",
   "com_download_expires": "(kliknij tutaj, aby pobrać - wygasa {{0}})",
