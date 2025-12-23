@@ -359,6 +359,7 @@ modelSpecs:
         endpoint: "google"
         model: "gemini-3-pro-preview"
         web_search: true
+        thinking: false
 
 # Example modelSpecs configuration showing grouping options
 # The 'group' field organizes model specs in the UI selector:
