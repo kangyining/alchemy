@@ -347,19 +347,69 @@ endpoints:
       modelDisplayLabel: 'Portkey'
       iconURL: https://images.crunchbase.com/image/upload/c_pad,f_auto,q_auto:eco,dpr_1/rjqy7ghvjoiu4cd1xjbf
 
-# System-wide default preset for all users
+# System-wide presets for all users - Multiple options
 modelSpecs:
   list:
-    # Default preset - Gemini 3 Pro (Grounded)
-    - name: "gemini-3-pro-grounded"
+    # Default preset - Gemini 3 Flash (Fastest & Cheapest)
+    - name: "gemini-3-flash"
       label: "Elixir"
-      description: "Gemini 3 Pro (Grounded)"
+      description: "Gemini 3 Flash (Fastest)"
       default: true  # This makes it the default for all users on login
+      preset:
+        endpoint: "google"
+        model: "gemini-3-flash-preview"
+        web_search: false
+        thinking: false
+    
+    # Gemini 3 Flash with Google Search - Budget-friendly research
+    - name: "gemini-3-flash-search"
+      label: "Elixir (Search)"
+      description: "Gemini 3 Flash with Google Search"
+      preset:
+        endpoint: "google"
+        model: "gemini-3-flash-preview"
+        web_search: true
+        thinking: false
+    
+    # Gemini 3 Pro - More capable, no grounding
+    - name: "gemini-3-pro"
+      label: "Elixir Pro"
+      description: "Gemini 3 Pro"
+      preset:
+        endpoint: "google"
+        model: "gemini-3-pro-preview"
+        web_search: false
+        thinking: false
+    
+    # Gemini 3 Pro with Google Search Grounding
+    - name: "gemini-3-pro-grounded"
+      label: "Elixir Pro (Search)"
+      description: "Gemini 3 Pro with Google Search"
       preset:
         endpoint: "google"
         model: "gemini-3-pro-preview"
         web_search: true
         thinking: false
+    
+    # Gemini 3 Pro with Extended Thinking - For complex reasoning
+    - name: "gemini-3-pro-thinking"
+      label: "Elixir Deep Think"
+      description: "Gemini 3 Pro with Thinking"
+      preset:
+        endpoint: "google"
+        model: "gemini-3-pro-preview"
+        web_search: false
+        thinking: true
+    
+    # Gemini 3 Pro with BOTH Thinking and Web Search - Ultimate capability
+    - name: "gemini-3-pro-ultimate"
+      label: "Elixir Deep Think (Search)"
+      description: "Gemini 3 Pro with Thinking and Google Search"
+      preset:
+        endpoint: "google"
+        model: "gemini-3-pro-preview"
+        web_search: true
+        thinking: true
 
 # Example modelSpecs configuration showing grouping options
 # The 'group' field organizes model specs in the UI selector:
