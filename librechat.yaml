@@ -346,6 +346,20 @@ endpoints:
       forcePrompt: false
       modelDisplayLabel: 'Portkey'
       iconURL: https://images.crunchbase.com/image/upload/c_pad,f_auto,q_auto:eco,dpr_1/rjqy7ghvjoiu4cd1xjbf
+
+# System-wide default preset for all users
+modelSpecs:
+  list:
+    # Default preset - Gemini 3 Pro (Grounded)
+    - name: "gemini-3-pro-grounded"
+      label: "Elixir"
+      description: "Gemini 3 Pro (Grounded)"
+      default: true  # This makes it the default for all users on login
+      preset:
+        endpoint: "google"
+        model: "gemini-3-pro-preview"
+        web_search: true
+
 # Example modelSpecs configuration showing grouping options
 # The 'group' field organizes model specs in the UI selector:
 # - If 'group' matches an endpoint name (e.g., "openAI", "groq"), the spec appears nested under that endpoint
@@ -431,7 +445,8 @@ endpoints:
 # # https://www.librechat.ai/docs/configuration/librechat_yaml/object_structure/assistants_endpoint
 
 # Web Search Configuration (optional)
-# webSearch:
+webSearch:
+  enabled: false
 #   # Jina Reranking Configuration
 #   jinaApiKey: '${JINA_API_KEY}'  # Your Jina API key
 #   jinaApiUrl: '${JINA_API_URL}'  # Custom Jina API URL (optional, defaults to https://api.jina.ai/v1/rerank)
