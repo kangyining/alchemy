@@ -11,4 +11,5 @@ git pull https://$TOKEN@github.com//lynx-canadensis/LibreChat.git
 
 # Restart services
 docker-compose pull
+docker-compose down
 docker-compose up -d

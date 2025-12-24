@@ -111,25 +111,52 @@ export class InfinityCapitalChat extends Construct {
       'systemctl start docker',
     
       // -------------------------------------------
-      // (Optional) Retrieve token from SSM
+      // Retrieve token from SSM
       // -------------------------------------------
       'echo "Fetching GitHub token from SSM..."',
       'TOKEN=$(aws ssm get-parameter --name /infinity-capital-chat/github-token --with-decryption --query Parameter.Value --output text --region us-east-1)',
     
       // -------------------------------------------
-      // Clone the repository and start the services
+      // Clone the repository
       // -------------------------------------------
       'git clone https://$TOKEN@github.com//lynx-canadensis/LibreChat.git /opt/librechat',
       'cd /opt/librechat',
-
       'docker-compose pull',
-      'docker-compose up -d',
+
+      // -------------------------------------------
+      // Create systemd service for docker-compose
+      // -------------------------------------------
+      'cat > /etc/systemd/system/librechat.service << EOF',
+      '[Unit]',
+      'Description=LibreChat Docker Compose Application',
+      'Requires=docker.service',
+      'After=docker.service',
+      '',
+      '[Service]',
+      'Type=oneshot',
+      'RemainAfterExit=yes',
+      'WorkingDirectory=/opt/librechat',
+      'ExecStart=/usr/bin/docker-compose up -d',
+      'ExecStop=/usr/bin/docker-compose down',
+      'ExecReload=/usr/bin/docker-compose pull && /usr/bin/docker-compose up -d',
+      'TimeoutStartSec=0',
+      '',
+      '[Install]',
+      'WantedBy=multi-user.target',
+      'EOF',
+
+      // -------------------------------------------
+      // Enable and start the systemd service
+      // -------------------------------------------
+      'systemctl daemon-reload',
+      'systemctl enable librechat.service',
+      'systemctl start librechat.service',
     );
 
     // Create EC2 instance
     const instanceType = props.instanceType || ec2.InstanceType.of(
       ec2.InstanceClass.T4G,
-      ec2.InstanceSize.SMALL
+      ec2.InstanceSize.MEDIUM
     );
 
     this.instance = new ec2.Instance(this, 'InfinityCapitalChatInstance', {
