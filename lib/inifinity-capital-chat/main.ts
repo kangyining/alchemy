@@ -94,7 +94,7 @@ export class InfinityCapitalChat extends Construct {
       // Update apt and install base tools
       // -------------------------------------------
       'apt-get update -y',
-      'apt-get install -y unzip curl git docker.io docker-compose',
+      'apt-get install -y unzip curl git docker.io docker-compose nginx certbot python3-certbot-nginx',
     
       // -------------------------------------------
       // Install AWS CLI v2 (ARM64 version for t4g*)
@@ -151,6 +151,48 @@ export class InfinityCapitalChat extends Construct {
       'systemctl daemon-reload',
       'systemctl enable librechat.service',
       'systemctl start librechat.service',
+
+      // -------------------------------------------
+      // Configure Nginx reverse proxy
+      // -------------------------------------------
+      'echo "Configuring Nginx reverse proxy..."',
+      'cat > /etc/nginx/sites-available/alchemy-solutions.co << NGINXEOF',
+      'server {',
+      '    listen 80;',
+      '    server_name alchemy-solutions.co www.alchemy-solutions.co;',
+      '',
+      '    location / {',
+      '        proxy_pass http://127.0.0.1:3080;',
+      '        proxy_http_version 1.1;',
+      '        proxy_set_header Upgrade \\$http_upgrade;',
+      '        proxy_set_header Connection "upgrade";',
+      '        proxy_set_header Host \\$host;',
+      '        proxy_set_header X-Real-IP \\$remote_addr;',
+      '        proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;',
+      '        proxy_set_header X-Forwarded-Proto \\$scheme;',
+      '        proxy_cache_bypass \\$http_upgrade;',
+      '        proxy_read_timeout 86400;',
+      '    }',
+      '}',
+      'NGINXEOF',
+
+      // -------------------------------------------
+      // Enable nginx site and restart
+      // -------------------------------------------
+      'ln -sf /etc/nginx/sites-available/alchemy-solutions.co /etc/nginx/sites-enabled/',
+      'rm -f /etc/nginx/sites-enabled/default',
+      'systemctl enable nginx',
+      'systemctl restart nginx',
+
+      // -------------------------------------------
+      // Obtain SSL certificate (will retry if DNS not ready)
+      // -------------------------------------------
+      'echo "Attempting to obtain SSL certificate..."',
+      'for i in 1 2 3 4 5; do',
+      '  certbot --nginx -d alchemy-solutions.co -d www.alchemy-solutions.co --non-interactive --agree-tos --email admin@alchemy-solutions.co --redirect && break',
+      '  echo "Certbot attempt $i failed, retrying in 60 seconds..."',
+      '  sleep 60',
+      'done',
     );
 
     // Create EC2 instance
