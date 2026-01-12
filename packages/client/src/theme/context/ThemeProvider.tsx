@@ -63,10 +63,8 @@ export function ThemeProvider({
     if (!propsInitialized.current) {
       propsInitialized.current = true;
 
-      // Set initial theme if provided
-      if (initialTheme) {
-        setTheme(initialTheme);
-      }
+      // Force dark theme for all users, overriding any stored preferences
+      setTheme('dark');
 
       // Set initial theme colors if provided
       if (propThemeRGB) {
