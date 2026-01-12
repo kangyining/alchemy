@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useContext } from 'react';
+import { memo, useState, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { useRecoilState } from 'recoil';
 import { useParams } from 'react-router-dom';
@@ -9,14 +9,13 @@ import {
   Spinner,
   Button,
   OGDialog,
-  ThemeContext,
   OGDialogTitle,
   useMediaQuery,
   OGDialogHeader,
   OGDialogContent,
   OGDialogTrigger,
 } from '@librechat/client';
-import { ThemeSelector, LangSelector } from '~/components/Nav/SettingsTabs/General/General';
+import { LangSelector } from '~/components/Nav/SettingsTabs/General/General';
 import { ShareArtifactsContainer } from './ShareArtifacts';
 import { useLocalize, useDocumentTitle } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';
@@ -29,7 +28,6 @@ import store from '~/store';
 function SharedView() {
   const localize = useLocalize();
   const { data: config } = useGetStartupConfig();
-  const { theme, setTheme } = useContext(ThemeContext);
   const { shareId } = useParams();
   const { data, isLoading } = useGetSharedMessages(shareId ?? '');
   const dataTree = data && buildTree({ messages: data.messages });
@@ -61,13 +59,6 @@ function SharedView() {
           year: 'numeric',
         })
       : null;
-
-  const handleThemeChange = useCallback(
-    (value: string) => {
-      setTheme(value);
-    },
-    [setTheme],
-  );
 
   const handleLangChange = useCallback(
     (value: string) => {
@@ -102,9 +93,7 @@ function SharedView() {
         <ShareHeader
           title={data.title}
           formattedDate={formattedDate}
-          theme={theme}
           langcode={langcode}
-          onThemeChange={handleThemeChange}
           onLangChange={handleLangChange}
           settingsLabel={localize('com_nav_settings')}
         />
@@ -159,20 +148,16 @@ function SharedView() {
 interface ShareHeaderProps {
   title?: string;
   formattedDate: string | null;
-  theme: string;
   langcode: string;
   settingsLabel: string;
-  onThemeChange: (value: string) => void;
   onLangChange: (value: string) => void;
 }
 
 function ShareHeader({
   title,
   formattedDate,
-  theme,
   langcode,
   settingsLabel,
-  onThemeChange,
   onLangChange,
 }: ShareHeaderProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -227,10 +212,6 @@ function ShareHeader({
                 <OGDialogTitle>{settingsLabel}</OGDialogTitle>
               </OGDialogHeader>
               <div className="flex flex-col gap-4 pt-2 text-sm">
-                <div className="relative focus-within:z-[100]">
-                  <ThemeSelector theme={theme} onChange={onThemeChange} portal={false} />
-                </div>
-                <div className="bg-border-medium/60 h-px w-full" />
                 <div className="relative focus-within:z-[100]">
                   <LangSelector langcode={langcode} onChange={onLangChange} portal={false} />
                 </div>
