@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Button, ThemeSelector } from '@librechat/client';
+import { Button } from '@librechat/client';
 import { useLocalize } from '~/hooks';
 
 function PanelNavigation({
@@ -24,7 +24,6 @@ function PanelNavigation({
   return (
     <div className="flex items-center justify-between">
       <div className="flex gap-2 pl-1">
-        {!isChatRoute && <ThemeSelector returnThemeOnly={true} />}
         {children}
       </div>
       <nav className="flex items-center gap-2" aria-label={localize('com_ui_pagination')}>

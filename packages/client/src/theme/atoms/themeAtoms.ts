@@ -7,7 +7,7 @@ import { IThemeRGB } from '../types';
 /**
  * @deprecated Use ThemeContext instead. This atom is no longer used internally.
  */
-export const themeModeAtom = atomWithStorage<string>('color-theme', 'system', undefined, {
+export const themeModeAtom = atomWithStorage<string>('color-theme', 'dark', undefined, {
   getOnInit: true,
 });
 

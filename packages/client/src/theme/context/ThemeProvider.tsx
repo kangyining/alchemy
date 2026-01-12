@@ -166,10 +166,8 @@ export function ThemeProvider({
     if (initialized.current) return;
     initialized.current = true;
 
-    // Set initial theme if provided
-    if (initialTheme) {
-      setTheme(initialTheme);
-    }
+    // Force dark theme for all users
+    setTheme('dark');
 
     // Set initial theme colors if provided
     if (propThemeRGB) {
