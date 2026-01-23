@@ -118,11 +118,12 @@ interface:
 #    language: "auto"    # "auto" or an ISO 639-1 language code (e.g. en)
 #    size: "normal"      # Options: "normal", "compact", "flexible", or "invisible"
 
-# Example Registration Object Structure (optional)
+# Registration configuration - Restricted to Infinity Capital
 registration:
   socialLogins: ['github', 'google', 'discord', 'openid', 'facebook', 'apple', 'saml']
-  # allowedDomains:
-  # - "gmail.com"
+  # Only allow Infinity Capital email addresses to register
+  allowedDomains:
+    - "infinitycapital.bh"
 
 # Example Balance settings
 # balance:
