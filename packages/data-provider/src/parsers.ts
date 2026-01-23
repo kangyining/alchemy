@@ -252,7 +252,7 @@ export const getResponseSender = (endpointOption: Partial<t.TEndpointOption>): s
       return 'Gemma';
     }
 
-    return 'Gemini';
+    return 'Elixir';
   }
 
   if (endpoint === EModelEndpoint.custom || endpointType === EModelEndpoint.custom) {
