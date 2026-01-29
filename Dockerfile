@@ -7,8 +7,21 @@ FROM node:20-alpine AS node
 RUN apk add --no-cache jemalloc
 RUN apk add --no-cache python3 py3-pip uv
 
+# Install Chromium and dependencies for Puppeteer/MCP PDF generation
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
 # Set environment variable to use jemalloc
 ENV LD_PRELOAD=/usr/lib/libjemalloc.so.2
+
+# Tell Puppeteer to use installed Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Add `uv` for extended MCP support
 COPY --from=ghcr.io/astral-sh/uv:0.6.13 /uv /uvx /bin/

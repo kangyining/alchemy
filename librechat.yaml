@@ -176,33 +176,35 @@ actions:
     - 'librechat.ai'
     - 'google.com'
 
-# Example MCP Servers Object Structure
-# mcpServers:
-#   everything:
-#     # type: sse # type can optionally be omitted
-#     url: http://localhost:3001/sse
-#     timeout: 60000  # 1 minute timeout for this server, this is the default timeout for MCP servers.
-#   puppeteer:
-#     type: stdio
-#     command: npx
-#     args:
-#       - -y
-#       - "@modelcontextprotocol/server-puppeteer"
-#     timeout: 300000  # 5 minutes timeout for this server
-#   filesystem:
-#     # type: stdio
-#     command: npx
-#     args:
-#       - -y
-#       - "@modelcontextprotocol/server-filesystem"
-#       - /home/user/LibreChat/
-#     iconPath: /home/user/LibreChat/client/public/assets/logo.svg
-#   mcp-obsidian:
-#     command: npx
-#     args:
-#       - -y
-#       - "mcp-obsidian"
-#       - /path/to/obsidian/vault
+# MCP Servers Configuration
+mcpServers:
+  markdown2pdf:
+    type: stdio
+    command: node
+    args:
+      - /app/mcp-servers/node_modules/markdown2pdf-mcp/build/index.js
+    env:
+      M2P_OUTPUT_DIR: /app/pdf-output
+      M2P_VERBOSE: "true"
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+    timeout: 300000  # 5 minutes for large files
+  
+  # Example MCP servers (commented out):
+  # puppeteer:
+  #   type: stdio
+  #   command: npx
+  #   args:
+  #     - -y
+  #     - "@modelcontextprotocol/server-puppeteer"
+  #   timeout: 300000
+  # filesystem:
+  #   type: stdio
+  #   command: npx
+  #   args:
+  #     - -y
+  #     - "@modelcontextprotocol/server-filesystem"
+  #     - /home/user/LibreChat/
 
 # Definition of custom endpoints
 endpoints:
@@ -214,11 +216,11 @@ endpoints:
   # Google Vertex AI endpoint - needed for modelSpecs to work
   # Leave it unconfigured to use defaults from .env
   
-  # Configure agents to enable only context (Upload as Text)
+  # Configure agents with full capabilities for financial analysis
   agents:
     disableBuilder: false
-    # Only enable "context" capability for Upload as Text feature
-    capabilities: ["context"]
+    # Enable tools, context, chain, code execution, and artifacts
+    capabilities: ["tools", "context", "chain", "execute_code", "artifacts"]
   
   # assistants:
   #   pollIntervalMs: 3000  # Polling interval for checking assistant updates
