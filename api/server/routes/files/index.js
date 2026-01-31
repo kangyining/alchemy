@@ -17,6 +17,44 @@ const speech = require('./speech');
 
 const initialize = async () => {
   const router = express.Router();
+  
+  // MCP PDF downloads - public access (no auth required)
+  const fs = require('fs').promises;
+  const path = require('path');
+  const { logger } = require('@librechat/data-schemas');
+  
+  router.get('/mcp/pdf/:filename', async (req, res) => {
+    try {
+      const { filename } = req.params;
+      logger.debug(`MCP PDF download requested: ${filename}`);
+
+      // Sanitize filename to prevent directory traversal
+      const sanitizedFilename = path.basename(filename);
+      if (sanitizedFilename !== filename) {
+        return res.status(400).send('Invalid filename');
+      }
+
+      const pdfPath = path.join('/app/pdf-output', sanitizedFilename);
+      
+      // Check if file exists
+      try {
+        await fs.access(pdfPath);
+      } catch (error) {
+        logger.error(`PDF file not found: ${pdfPath}`);
+        return res.status(404).send('File not found');
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}"`);
+      
+      const fileStream = await fs.readFile(pdfPath);
+      res.send(fileStream);
+    } catch (error) {
+      logger.error('Error downloading MCP PDF:', error);
+      res.status(500).send('Error downloading file');
+    }
+  });
+  
   router.use(requireJwtAuth);
   router.use(configMiddleware);
   router.use(checkBan);

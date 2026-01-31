@@ -154,5 +154,8 @@
       "admin/",
       "packages/"
     ]
+  },
+  "dependencies": {
+    "markdown2pdf-mcp": "^2.1.3"
   }
 }
