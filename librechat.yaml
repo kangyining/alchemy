@@ -189,7 +189,19 @@ mcpServers:
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium-browser
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
     timeout: 300000  # 5 minutes for large files
-  
+
+  salesforce:
+    type: stdio
+    command: npx
+    args:
+      - -y
+      - "@salesforce/mcp"
+      - "--orgs"
+      - "ALLOW_ALL_ORGS"
+      - "--toolsets"
+      - "orgs,metadata,data,users"
+    timeout: 300000
+
   # Example MCP servers (commented out):
   # puppeteer:
   #   type: stdio
@@ -210,7 +222,7 @@ mcpServers:
 endpoints:
   # Disable unwanted endpoints - only Google and modelSpecs will be available
   openAI:
-    disabled: true
+    disabled: false
   anthropic:
     disabled: true
   # Google Vertex AI endpoint - needed for modelSpecs to work
