@@ -61,7 +61,7 @@ def _get_text_from_layout(layout, document_text: str) -> str:
     return text
 
 
-def parse_uploaded_documents(tool_context: ToolContext) -> dict:
+async def parse_uploaded_documents(tool_context: ToolContext) -> dict:
     """Parse all uploaded documents using Document AI Layout Parser.
 
     Reads artifacts from the session, sends each to Document AI Layout Parser,
@@ -75,8 +75,12 @@ def parse_uploaded_documents(tool_context: ToolContext) -> dict:
         f"projects/{PROJECT_ID}/locations/{LOCATION}/processors/{PROCESSOR_ID}"
     )
 
-    artifact_names = tool_context.list_artifacts()
+    artifact_names = await tool_context.list_artifacts()
     if not artifact_names:
+        # Initialize empty state to prevent downstream KeyErrors
+        tool_context.state["parsed_documents"] = ""
+        tool_context.state["parsed_tables_json"] = "[]"
+        tool_context.state["document_sources"] = []
         return {
             "status": "error",
             "message": "No documents were uploaded. Please upload files first.",
@@ -87,7 +91,7 @@ def parse_uploaded_documents(tool_context: ToolContext) -> dict:
 
     for name in artifact_names:
         try:
-            artifact = tool_context.load_artifact(name)
+            artifact = await tool_context.load_artifact(name)
             file_bytes = artifact.inline_data.data
             mime_type = _get_mime_type(name)
 

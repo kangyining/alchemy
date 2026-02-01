@@ -90,11 +90,11 @@ def _validate_chart_numbers(client, image_bytes: bytes, source_data: dict) -> bo
         return False
 
 
-def _save_chart_artifact(tool_context: ToolContext, slide_number: int, image_bytes: bytes):
+async def _save_chart_artifact(tool_context: ToolContext, slide_number: int, image_bytes: bytes):
     """Save chart image as ADK artifact and store reference in state."""
     filename = f"slide_{slide_number:02d}_chart.png"
     artifact = genai_types.Part.from_data(data=image_bytes, mime_type="image/png")
-    tool_context.save_artifact(filename, artifact)
+    await tool_context.save_artifact(filename, artifact)
     tool_context.state[f"slide_{slide_number:02d}_chart_image"] = filename
 
 
@@ -175,7 +175,7 @@ MPL_RENDERERS = {
 
 # --- ADK Tool Functions ---
 
-def _generate_chart(
+async def _generate_chart(
     chart_type: str, data_json: str, slide_number: int, tool_context: ToolContext
 ) -> dict:
     """Shared chart generation logic: Gemini first, matplotlib fallback."""
@@ -203,7 +203,7 @@ Categories and exact values (render these numbers precisely on the chart):
         image_bytes = _extract_image_bytes(response)
 
         if image_bytes and _validate_chart_numbers(client, image_bytes, data):
-            _save_chart_artifact(tool_context, slide_number, image_bytes)
+            await _save_chart_artifact(tool_context, slide_number, image_bytes)
             return {"status": "success", "method": "gemini_image_gen", "chart_type": chart_type}
     except Exception:
         pass
@@ -211,11 +211,11 @@ Categories and exact values (render these numbers precisely on the chart):
     # Step 2: Fallback to matplotlib
     renderer = MPL_RENDERERS.get(chart_type, _render_matplotlib_bar_chart)
     image_bytes = renderer(data)
-    _save_chart_artifact(tool_context, slide_number, image_bytes)
+    await _save_chart_artifact(tool_context, slide_number, image_bytes)
     return {"status": "success", "method": "matplotlib_fallback", "chart_type": chart_type}
 
 
-def generate_bar_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
+async def generate_bar_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
     """Generate a bar chart from structured data.
 
     Args:
@@ -226,10 +226,10 @@ def generate_bar_chart(data_json: str, slide_number: int, tool_context: ToolCont
     Returns:
         Status dict with generation method used.
     """
-    return _generate_chart("bar", data_json, slide_number, tool_context)
+    return await _generate_chart("bar", data_json, slide_number, tool_context)
 
 
-def generate_line_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
+async def generate_line_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
     """Generate a line chart from structured data.
 
     Args:
@@ -241,10 +241,10 @@ def generate_line_chart(data_json: str, slide_number: int, tool_context: ToolCon
     Returns:
         Status dict with generation method used.
     """
-    return _generate_chart("line", data_json, slide_number, tool_context)
+    return await _generate_chart("line", data_json, slide_number, tool_context)
 
 
-def generate_pie_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
+async def generate_pie_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
     """Generate a pie chart from structured data.
 
     Args:
@@ -255,4 +255,4 @@ def generate_pie_chart(data_json: str, slide_number: int, tool_context: ToolCont
     Returns:
         Status dict with generation method used.
     """
-    return _generate_chart("pie", data_json, slide_number, tool_context)
+    return await _generate_chart("pie", data_json, slide_number, tool_context)

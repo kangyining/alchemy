@@ -64,10 +64,10 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 </html>""")
 
 
-def _load_chart_image(tool_context: ToolContext, filename: str) -> bytes | None:
+async def _load_chart_image(tool_context: ToolContext, filename: str) -> bytes | None:
     """Load a chart image artifact, return raw bytes or None."""
     try:
-        artifact = tool_context.load_artifact(filename)
+        artifact = await tool_context.load_artifact(filename)
         if artifact and artifact.inline_data:
             return artifact.inline_data.data
     except Exception:
@@ -75,7 +75,7 @@ def _load_chart_image(tool_context: ToolContext, filename: str) -> bytes | None:
     return None
 
 
-def assemble_report(tool_context: ToolContext) -> dict:
+async def assemble_report(tool_context: ToolContext) -> dict:
     """Assemble all slide outputs into PPTX and PDF files.
 
     Reads slide content from session state, builds a PowerPoint presentation
@@ -109,7 +109,7 @@ def assemble_report(tool_context: ToolContext) -> dict:
         )
         chart_bytes = None
         if chart_filename:
-            chart_bytes = _load_chart_image(tool_context, chart_filename)
+            chart_bytes = await _load_chart_image(tool_context, chart_filename)
 
         if spec.slide_type == SlideType.CHART and chart_bytes:
             # Chart-only slide: image takes most of the space, small text below
@@ -165,9 +165,9 @@ def assemble_report(tool_context: ToolContext) -> dict:
     pptx_buf = io.BytesIO()
     prs.save(pptx_buf)
     pptx_buf.seek(0)
-    tool_context.save_artifact(
+    await tool_context.save_artifact(
         "financial_report.pptx",
-        genai_types.Part.from_data(
+        genai_types.Part.from_bytes(
             data=pptx_buf.read(),
             mime_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
         ),
@@ -176,9 +176,9 @@ def assemble_report(tool_context: ToolContext) -> dict:
     # --- Generate and save PDF artifact ---
     html_str = PDF_TEMPLATE.render(sections=pdf_sections)
     pdf_bytes = HTML(string=html_str).write_pdf()
-    tool_context.save_artifact(
+    await tool_context.save_artifact(
         "financial_report.pdf",
-        genai_types.Part.from_data(
+        genai_types.Part.from_bytes(
             data=pdf_bytes,
             mime_type="application/pdf",
         ),
