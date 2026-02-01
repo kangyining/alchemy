@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 import os
 
 import matplotlib
@@ -11,6 +12,8 @@ import matplotlib.pyplot as plt
 from google import genai
 from google.adk.tools import ToolContext
 from google.genai import types as genai_types
+
+logger = logging.getLogger(__name__)
 
 CHART_STYLE_PROMPT = """Professional financial report chart. Clean, modern design.
 Dark navy (#1A3C6E) for titles, blue (#2E86AB) as primary color, white background.
@@ -33,16 +36,23 @@ MPL_STYLE = {
 }
 plt.rcParams.update(MPL_STYLE)
 
+# Singleton Gemini client — avoids creating a new connection per chart call
+_genai_client = None
+
 
 def _get_genai_client():
-    """Create a Gemini client using Vertex AI (ADC) or API key."""
-    if os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").upper() == "TRUE":
-        return genai.Client(
-            vertexai=True,
-            project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
-            location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
-        )
-    return genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+    """Return a cached Gemini client (Vertex AI or API key)."""
+    global _genai_client
+    if _genai_client is None:
+        if os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").upper() == "TRUE":
+            _genai_client = genai.Client(
+                vertexai=True,
+                project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
+                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
+            )
+        else:
+            _genai_client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+    return _genai_client
 
 
 def _extract_image_bytes(response) -> bytes | None:
@@ -86,14 +96,15 @@ def _validate_chart_numbers(client, image_bytes: bytes, source_data: dict) -> bo
             if not found:
                 return False
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning("Chart validation failed: %s", e)
         return False
 
 
 async def _save_chart_artifact(tool_context: ToolContext, slide_number: int, image_bytes: bytes):
     """Save chart image as ADK artifact and store reference in state."""
     filename = f"slide_{slide_number:02d}_chart.png"
-    artifact = genai_types.Part.from_data(data=image_bytes, mime_type="image/png")
+    artifact = genai_types.Part.from_bytes(data=image_bytes, mime_type="image/png")
     await tool_context.save_artifact(filename, artifact)
     tool_context.state[f"slide_{slide_number:02d}_chart_image"] = filename
 
@@ -173,13 +184,16 @@ MPL_RENDERERS = {
 }
 
 
-# --- ADK Tool Functions ---
+# --- Core chart generation logic ---
 
 async def _generate_chart(
     chart_type: str, data_json: str, slide_number: int, tool_context: ToolContext
 ) -> dict:
     """Shared chart generation logic: Gemini first, matplotlib fallback."""
-    data = json.loads(data_json)
+    try:
+        data = json.loads(data_json)
+    except json.JSONDecodeError as e:
+        return {"status": "error", "message": f"Invalid chart data JSON: {e}"}
 
     # Step 1: Try Gemini image generation
     try:
@@ -205,8 +219,8 @@ Categories and exact values (render these numbers precisely on the chart):
         if image_bytes and _validate_chart_numbers(client, image_bytes, data):
             await _save_chart_artifact(tool_context, slide_number, image_bytes)
             return {"status": "success", "method": "gemini_image_gen", "chart_type": chart_type}
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Gemini image generation failed for slide %d, falling back to matplotlib: %s", slide_number, e)
 
     # Step 2: Fallback to matplotlib
     renderer = MPL_RENDERERS.get(chart_type, _render_matplotlib_bar_chart)
@@ -215,44 +229,36 @@ Categories and exact values (render these numbers precisely on the chart):
     return {"status": "success", "method": "matplotlib_fallback", "chart_type": chart_type}
 
 
-async def generate_bar_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
-    """Generate a bar chart from structured data.
+# --- ADK Tool Functions ---
+# slide_number is NO LONGER an LLM-provided parameter.
+# The slide_agent_factory creates bound wrappers with the correct slide_number
+# pre-injected, so the LLM only needs to provide data_json.
+
+
+def make_chart_tool(chart_type: str, slide_number: int):
+    """Create a chart generation tool pre-bound to a specific slide number.
+
+    Returns an async function with only `data_json` and `tool_context` as
+    parameters — the LLM doesn't need to know which slide number it is.
+    """
+    type_names = {"bar": "bar_chart", "line": "line_chart", "pie": "pie_chart"}
+    type_descs = {"bar": "bar chart", "line": "line chart", "pie": "pie chart"}
+    func_name = f"generate_{type_names[chart_type]}"
+    type_desc = type_descs[chart_type]
+
+    async def _tool(data_json: str, tool_context: ToolContext) -> dict:
+        return await _generate_chart(chart_type, data_json, slide_number, tool_context)
+
+    # Set function metadata for ADK tool discovery
+    _tool.__name__ = func_name
+    _tool.__qualname__ = func_name
+    _tool.__doc__ = f"""Generate a {type_desc} from structured data.
 
     Args:
         data_json: JSON string with keys: categories (list[str]), values (list[float]),
                    title (str), x_label (str), y_label (str), value_format (str, optional)
-        slide_number: The slide number this chart belongs to.
 
     Returns:
         Status dict with generation method used.
     """
-    return await _generate_chart("bar", data_json, slide_number, tool_context)
-
-
-async def generate_line_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
-    """Generate a line chart from structured data.
-
-    Args:
-        data_json: JSON string with keys: categories (list[str]), values (list[float]),
-                   title (str), x_label (str), y_label (str),
-                   series (list[dict] with 'label' and 'values', optional)
-        slide_number: The slide number this chart belongs to.
-
-    Returns:
-        Status dict with generation method used.
-    """
-    return await _generate_chart("line", data_json, slide_number, tool_context)
-
-
-async def generate_pie_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
-    """Generate a pie chart from structured data.
-
-    Args:
-        data_json: JSON string with keys: categories (list[str]), values (list[float]),
-                   title (str)
-        slide_number: The slide number this chart belongs to.
-
-    Returns:
-        Status dict with generation method used.
-    """
-    return await _generate_chart("pie", data_json, slide_number, tool_context)
+    return _tool

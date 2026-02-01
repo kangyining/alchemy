@@ -1,10 +1,15 @@
-"""Document parsing tool using Google Cloud Document AI Layout Parser."""
+"""Document parsing using Google Cloud Document AI Layout Parser."""
 
+import asyncio
 import json
 import os
+from typing import Optional
 
-from google.adk.tools import ToolContext
+from dotenv import load_dotenv
 from google.cloud import documentai_v1 as documentai
+from google.genai import types as genai_types
+
+load_dotenv()
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("DOCAI_LOCATION", "us")
@@ -61,40 +66,59 @@ def _get_text_from_layout(layout, document_text: str) -> str:
     return text
 
 
-async def parse_uploaded_documents(tool_context: ToolContext) -> dict:
-    """Parse all uploaded documents using Document AI Layout Parser.
+def _collect_inline_files(
+    user_content: Optional[genai_types.Content],
+) -> list[tuple[str, bytes, str]]:
+    """Extract inline file parts from user message content.
 
-    Reads artifacts from the session, sends each to Document AI Layout Parser,
-    and stores the parsed markdown content and table data in session state.
+    ADK web sends uploaded files as inline_data parts rather than artifacts.
+    Returns list of (filename, data_bytes, mime_type) tuples.
+    """
+    files = []
+    if not user_content or not user_content.parts:
+        return files
+
+    ext_map = {v: k for k, v in MIME_TYPE_MAP.items()}
+    for i, part in enumerate(user_content.parts):
+        if part.inline_data and part.inline_data.data:
+            mime = part.inline_data.mime_type or "application/octet-stream"
+            ext = ext_map.get(mime, ".bin")
+            name = f"upload_{i}{ext}"
+            files.append((name, part.inline_data.data, mime))
+    return files
+
+
+async def parse_documents(
+    files: list[tuple[str, bytes, str]],
+) -> dict:
+    """Parse documents using Document AI Layout Parser.
+
+    Args:
+        files: List of (filename, raw_bytes, mime_type) tuples.
 
     Returns:
-        Summary of parsing results.
+        Dict with keys: status, parsed_documents, parsed_tables_json,
+        document_sources, documents_parsed, text_sections, tables_found, errors.
     """
+    if not files:
+        return {
+            "status": "error",
+            "message": "No documents were detected. Please upload files first.",
+            "parsed_documents": "",
+            "parsed_tables_json": "[]",
+            "document_sources": [],
+        }
+
     client = documentai.DocumentProcessorServiceClient()
     processor_name = (
         f"projects/{PROJECT_ID}/locations/{LOCATION}/processors/{PROCESSOR_ID}"
     )
 
-    artifact_names = await tool_context.list_artifacts()
-    if not artifact_names:
-        # Initialize empty state to prevent downstream KeyErrors
-        tool_context.state["parsed_documents"] = ""
-        tool_context.state["parsed_tables_json"] = "[]"
-        tool_context.state["document_sources"] = []
-        return {
-            "status": "error",
-            "message": "No documents were uploaded. Please upload files first.",
-        }
-
     parsed = {"text_sections": [], "tables": []}
     errors = []
 
-    for name in artifact_names:
+    for name, file_bytes, mime_type in files:
         try:
-            artifact = await tool_context.load_artifact(name)
-            file_bytes = artifact.inline_data.data
-            mime_type = _get_mime_type(name)
-
             request = documentai.ProcessRequest(
                 name=processor_name,
                 raw_document=documentai.RawDocument(
@@ -109,25 +133,18 @@ async def parse_uploaded_documents(tool_context: ToolContext) -> dict:
                     )
                 ),
             )
-            result = client.process_document(request=request)
+            result = await asyncio.to_thread(client.process_document, request=request)
             document = result.document
 
             # Extract markdown chunks from Layout Parser
             if document.chunked_document and document.chunked_document.chunks:
                 for chunk in document.chunked_document.chunks:
                     parsed["text_sections"].append(
-                        {
-                            "source": name,
-                            "content": chunk.content,
-                        }
+                        {"source": name, "content": chunk.content}
                     )
             elif document.text:
-                # Fallback: if no chunks, use the full document text
                 parsed["text_sections"].append(
-                    {
-                        "source": name,
-                        "content": document.text,
-                    }
+                    {"source": name, "content": document.text}
                 )
 
             # Extract tables separately for chart agents
@@ -141,20 +158,20 @@ async def parse_uploaded_documents(tool_context: ToolContext) -> dict:
         except Exception as e:
             errors.append({"file": name, "error": str(e)})
 
-    # Build a single concatenated text for agents to consume
+    # Build concatenated text
     all_text_parts = []
     for section in parsed["text_sections"]:
-        all_text_parts.append(f"--- Source: {section['source']} ---\n{section['content']}")
-    parsed["full_text"] = "\n\n".join(all_text_parts)
-
-    # Store in session state
-    tool_context.state["parsed_documents"] = parsed["full_text"]
-    tool_context.state["parsed_tables_json"] = json.dumps(parsed["tables"], default=str)
-    tool_context.state["document_sources"] = [name for name in artifact_names]
+        all_text_parts.append(
+            f"--- Source: {section['source']} ---\n{section['content']}"
+        )
+    full_text = "\n\n".join(all_text_parts)
 
     return {
         "status": "success",
-        "documents_parsed": len(artifact_names) - len(errors),
+        "parsed_documents": full_text,
+        "parsed_tables_json": json.dumps(parsed["tables"], default=str),
+        "document_sources": [name for name, _, _ in files],
+        "documents_parsed": len(files) - len(errors),
         "text_sections": len(parsed["text_sections"]),
         "tables_found": len(parsed["tables"]),
         "errors": errors if errors else None,

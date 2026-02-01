@@ -33,5 +33,8 @@ output/
 *.pptx
 *.pdf
 
+# ADK
+*.db
+
 # Test artifacts
 sample_data/

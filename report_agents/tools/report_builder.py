@@ -1,5 +1,6 @@
-"""Report assembly tool: builds PPTX and PDF from slide agent outputs."""
+"""Report assembly: builds PPTX and PDF from slide agent outputs."""
 
+import base64
 import io
 import json
 
@@ -9,7 +10,6 @@ from pptx import Presentation
 from pptx.util import Inches
 from weasyprint import HTML
 
-from google.adk.tools import ToolContext
 from google.genai import types as genai_types
 
 from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType
@@ -64,28 +64,21 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 </html>""")
 
 
-async def _load_chart_image(tool_context: ToolContext, filename: str) -> bytes | None:
-    """Load a chart image artifact, return raw bytes or None."""
-    try:
-        artifact = await tool_context.load_artifact(filename)
-        if artifact and artifact.inline_data:
-            return artifact.inline_data.data
-    except Exception:
-        pass
-    return None
+async def assemble_report(
+    state: dict,
+    load_artifact_fn=None,
+) -> dict:
+    """Assemble all slide outputs into PPTX and PDF bytes.
 
-
-async def assemble_report(tool_context: ToolContext) -> dict:
-    """Assemble all slide outputs into PPTX and PDF files.
-
-    Reads slide content from session state, builds a PowerPoint presentation
-    and a PDF document. Saves both as ADK artifacts for download.
+    Args:
+        state: Session state dict containing slide_NN_content and
+               slide_NN_chart_image keys.
+        load_artifact_fn: Async callable(filename) -> bytes|None for
+                          loading chart image artifacts.
 
     Returns:
-        Status dict with slide count and artifact names.
+        Dict with status, slides_generated, pptx_bytes, pdf_bytes.
     """
-    import base64
-
     prs = Presentation()
     prs.slide_width = SLIDE_WIDTH
     prs.slide_height = SLIDE_HEIGHT
@@ -94,7 +87,7 @@ async def assemble_report(tool_context: ToolContext) -> dict:
     slides_generated = 0
 
     for spec in SLIDE_REGISTRY:
-        content = tool_context.state.get(slide_content_key(spec.slide_number), "")
+        content = state.get(slide_content_key(spec.slide_number), "")
         if not content:
             continue
 
@@ -104,15 +97,14 @@ async def assemble_report(tool_context: ToolContext) -> dict:
         add_title_bar(slide, spec.title)
 
         # Load chart image if this slide has one
-        chart_filename = tool_context.state.get(
+        chart_filename = state.get(
             slide_chart_image_key(spec.slide_number), ""
         )
         chart_bytes = None
-        if chart_filename:
-            chart_bytes = await _load_chart_image(tool_context, chart_filename)
+        if chart_filename and load_artifact_fn:
+            chart_bytes = await load_artifact_fn(chart_filename)
 
         if spec.slide_type == SlideType.CHART and chart_bytes:
-            # Chart-only slide: image takes most of the space, small text below
             img_stream = io.BytesIO(chart_bytes)
             slide.shapes.add_picture(
                 img_stream,
@@ -121,14 +113,12 @@ async def assemble_report(tool_context: ToolContext) -> dict:
                 CONTENT_WIDTH,
                 Inches(4.5),
             )
-            # Add summary text below chart
             render_markdown_to_textbox(
                 slide, content,
                 left=CONTENT_LEFT, top=Inches(5.8),
                 width=CONTENT_WIDTH, height=Inches(1.2),
             )
         elif spec.slide_type == SlideType.MIXED and chart_bytes:
-            # Mixed: text on left, chart on right
             render_markdown_to_textbox(
                 slide, content,
                 left=CONTENT_LEFT, top=CONTENT_TOP,
@@ -141,7 +131,6 @@ async def assemble_report(tool_context: ToolContext) -> dict:
                 Inches(5.8), Inches(4.0),
             )
         else:
-            # Text or table slide
             render_markdown_to_textbox(slide, content)
 
         # --- Build PDF section ---
@@ -161,31 +150,17 @@ async def assemble_report(tool_context: ToolContext) -> dict:
 
         slides_generated += 1
 
-    # --- Save PPTX artifact ---
+    # --- Generate bytes ---
     pptx_buf = io.BytesIO()
     prs.save(pptx_buf)
-    pptx_buf.seek(0)
-    await tool_context.save_artifact(
-        "financial_report.pptx",
-        genai_types.Part.from_bytes(
-            data=pptx_buf.read(),
-            mime_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        ),
-    )
+    pptx_bytes = pptx_buf.getvalue()
 
-    # --- Generate and save PDF artifact ---
     html_str = PDF_TEMPLATE.render(sections=pdf_sections)
     pdf_bytes = HTML(string=html_str).write_pdf()
-    await tool_context.save_artifact(
-        "financial_report.pdf",
-        genai_types.Part.from_bytes(
-            data=pdf_bytes,
-            mime_type="application/pdf",
-        ),
-    )
 
     return {
         "status": "success",
         "slides_generated": slides_generated,
-        "artifacts": ["financial_report.pptx", "financial_report.pdf"],
+        "pptx_bytes": pptx_bytes,
+        "pdf_bytes": pdf_bytes,
     }
