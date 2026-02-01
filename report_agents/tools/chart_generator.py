@@ -58,7 +58,7 @@ def _validate_chart_numbers(client, image_bytes: bytes, source_data: dict) -> bo
     """Ask Gemini to read the chart image and verify numbers match source data."""
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-3-pro-preview",
             contents=[
                 genai_types.Part.from_data(data=image_bytes, mime_type="image/png"),
                 (

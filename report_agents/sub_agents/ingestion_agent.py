@@ -6,7 +6,7 @@ from report_agents.tools.document_parser import parse_uploaded_documents
 
 ingestion_agent = LlmAgent(
     name="IngestionAgent",
-    model="gemini-2.5-pro",
+    model="gemini-3-pro-preview",
     instruction="""You are a document ingestion assistant for financial report generation.
 
 When the user uploads financial documents and asks to generate a report,

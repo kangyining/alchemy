@@ -18,7 +18,7 @@ CHART_TOOLS = {
     ChartType.PIE: generate_pie_chart,
 }
 
-MODEL = "gemini-2.5-pro"
+MODEL = "gemini-3-pro-preview"
 
 
 def create_slide_agents() -> list[LlmAgent]:

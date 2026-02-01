@@ -25,7 +25,7 @@ parallel_slide_generation = ParallelAgent(
 # Assembly agent calls the deterministic report builder tool
 assembly_agent = LlmAgent(
     name="ReportAssemblyAgent",
-    model="gemini-2.5-pro",
+    model="gemini-3-pro-preview",
     instruction="""You are the report assembly agent. Call the assemble_report tool
 to build the final PowerPoint and PDF from all the slide content that has been generated.
 

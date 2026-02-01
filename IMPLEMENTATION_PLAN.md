@@ -336,7 +336,7 @@ def create_slide_agents() -> list[LlmAgent]:
             tools.append(calculate_financial_metrics)
         agent = LlmAgent(
             name=f"SlideAgent_{spec.slide_number:02d}",
-            model="gemini-2.5-pro",
+            model="gemini-3-pro-preview",
             instruction=spec.prompt,
             tools=tools,
             output_key=f"slide_{spec.slide_number:02d}_content",
