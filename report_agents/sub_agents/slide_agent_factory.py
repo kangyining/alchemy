@@ -30,6 +30,8 @@ def create_slide_agents() -> list[LlmAgent]:
     """
     agents = []
     for spec in SLIDE_REGISTRY:
+        if spec.slide_number not in (1, 2):  # TODO: remove filter after testing
+            continue
         tools = [calculate_financial_metrics]
 
         if spec.slide_type in (SlideType.CHART, SlideType.MIXED):
