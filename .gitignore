@@ -13,8 +13,10 @@ build/
 venv/
 env/
 
-# Environment variables
+# Environment variables and credentials
 .env
+service-account.json
+*.json.key
 
 # IDE
 .vscode/

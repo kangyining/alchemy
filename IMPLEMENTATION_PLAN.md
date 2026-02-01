@@ -4,6 +4,8 @@
 
 Build a multi-agent financial report generator using **Google ADK** (Agent Development Kit). Users upload documents (Word, Excel, CSV, PDF), and a pipeline of agents extracts information per-slide, generates charts programmatically, and outputs PPTX + PDF files. Start with ADK Web UI; later wrap with FastAPI for React frontend.
 
+**Document parsing** uses **Google Cloud Document AI Layout Parser** — OCR-grounded, outputs markdown natively, supports PDF/DOCX/XLSX/PPTX, and preserves table structure with minimal hallucination risk.
+
 ---
 
 ## Architecture
@@ -16,7 +18,7 @@ User uploads docs (ADK Web UI)
 │  SequentialAgent (root_agent)   │
 │                                 │
 │  1. IngestionAgent              │  ← Parses all docs into session state
-│     └─ tool: parse_documents()  │     (deterministic, no LLM parsing)
+│     └─ tool: parse_documents()  │     (Document AI Layout Parser, OCR-grounded)
 │                                 │
 │  2. ParallelAgent               │  ← All slide agents run concurrently
 │     ├─ SlideAgent_01 (text)     │     Each reads state, writes to unique key
@@ -47,7 +49,7 @@ No race conditions — each slide agent writes to its own unique key.
 ```
 report-agents/
 ├── pyproject.toml
-├── .env                              # GOOGLE_API_KEY
+├── .env                              # GOOGLE_API_KEY, GOOGLE_CLOUD_PROJECT, DOCAI_PROCESSOR_ID
 ├── report_agents/                    # ADK agent package (discovered by `adk web`)
 │   ├── __init__.py
 │   ├── agent.py                      # root_agent — SequentialAgent orchestrator
@@ -59,7 +61,7 @@ report-agents/
 │   │   └── ...
 │   ├── tools/
 │   │   ├── __init__.py
-│   │   ├── document_parser.py        # Parse PDF/Excel/CSV/DOCX → session state
+│   │   ├── document_parser.py        # Document AI Layout Parser → markdown + tables → session state
 │   │   ├── chart_generator.py        # matplotlib chart tools (bar, line, pie, etc.)
 │   │   ├── financial_calc.py         # Deterministic financial calculations (YoY, margins)
 │   │   └── report_builder.py         # Assemble PPTX + PDF from slide outputs
@@ -82,13 +84,50 @@ report-agents/
 
 ## Key Design Decisions
 
-### 1. Document Parsing is Deterministic (No LLM)
+### 1. Document Parsing via Google Cloud Document AI Layout Parser
 
-Parse docs with Python libraries (pdfplumber, pandas, python-docx), store raw text + tables in session state. LLMs only reason over already-extracted content. This prevents hallucination at the extraction layer.
+Uses the **Gemini Layout Parser** processor from Document AI — not raw Python libraries or direct LLM parsing. Key advantages:
+- **OCR-grounded**: Reads what's actually on the page, preventing hallucination at the extraction layer
+- **Native markdown output**: Aligns directly with our intermediate format, no conversion needed
+- **Semantic chunking**: Built-in context-aware chunking preserves table headers and section hierarchy
+- **Format coverage**: GA support for PDF, DOCX, XLSX, PPTX — all required input formats
+- **Table fidelity**: Preserves merged cells, row/column spans, and header structure
+- Cost: ~$0.10-0.20 per document (well within budget for financial reports)
+- Requires: Google Cloud project with Document AI API enabled, a Layout Parser processor
 
-### 2. Charts are Programmatic (matplotlib)
+LLMs (Gemini via slide agents) only reason over the already-parsed markdown content downstream.
 
-Slide agents extract data as structured JSON, then call chart tool functions. Tools render with matplotlib, save PNG as ADK artifact. Deterministic, reproducible, and accurate for financial data.
+### Context Strategy: Pass Full Corpus to Every Slide Agent
+
+With **Gemini 3 Pro's 2M token context window**, 10 parsed financial documents (~500K tokens) fit comfortably at ~25% capacity. Each slide agent receives the full parsed corpus — no routing, filtering, or RAG needed.
+
+- **Why**: Financial slides often need cross-references (e.g., revenue slide needs income statement + management discussion). Full context ensures nothing is missed.
+- **Cost**: ~$9-10 per report for slide agent input tokens. Acceptable for financial reports.
+- **Future optimization**: If volume grows, add topic-based routing (match chunk headings to slide topics) to reduce cost 5-10x without rearchitecting.
+
+### 2. Charts: Gemini Image Gen First, matplotlib Fallback
+
+**Primary**: Slide agents extract data as structured JSON, then call a chart tool that uses **Gemini 3 Pro Image** (`gemini-3-pro-image-preview`) to generate polished, presentation-ready chart images (up to 4K resolution).
+
+**Validation**: After generation, a validation step checks that key numbers/labels in the chart match the source data. Gemini image gen has ~<10% text error rate — acceptable for most charts but not guaranteed.
+
+**Fallback**: If validation fails (numbers don't match, chart is garbled), the tool automatically falls back to **matplotlib** to produce a deterministic, pixel-accurate chart.
+
+```
+Slide Agent extracts data JSON
+         │
+         ▼
+┌─ Chart Tool ──────────────────────────┐
+│  1. Call Gemini 3 Pro Image Gen       │
+│  2. Validate: OCR the output image,   │
+│     compare numbers to source data    │
+│  3. If valid → save as artifact       │
+│  4. If invalid → fallback matplotlib  │
+│     → save as artifact                │
+└───────────────────────────────────────┘
+```
+
+This gives presentation-quality visuals by default with a safety net for financial accuracy.
 
 ### 3. Intermediate Format is Markdown
 
@@ -127,60 +166,137 @@ The factory reads this registry to create agents dynamically. Adding/removing sl
 ### Step 1: Project Setup
 
 - Create `pyproject.toml` with all dependencies
-- Create `.env` with `GOOGLE_API_KEY`
+- Create `.env` with `GOOGLE_API_KEY`, `GOOGLE_CLOUD_PROJECT`, `DOCAI_PROCESSOR_ID`, `DOCAI_LOCATION`
+- Set up Google Cloud project: enable Document AI API, create Layout Parser processor
 - Create full directory structure with `__init__.py` files
 - Verify `adk web` starts with a minimal hello-world agent
 
 ### Step 2: Document Parser Tool (`tools/document_parser.py`)
 
 - Implement `parse_uploaded_documents(tool_context)` ADK tool function
-- Uses pdfplumber for PDF, pandas for Excel/CSV, python-docx for Word
+- Uses **Google Cloud Document AI Layout Parser** for all document formats
 - Reads uploaded files from ADK artifacts system
+- Sends each file to Document AI Layout Parser processor
+- Receives **markdown + structured chunks** back (native output format)
 - Writes parsed content to session state:
-  - `state["parsed_documents"]` — text sections with source attribution
-  - `state["parsed_tables_json"]` — serialized table data
+  - `state["parsed_documents"]` — markdown text per document with source attribution
+  - `state["parsed_tables_json"]` — extracted table data as structured JSON
 
 ```python
+from google.cloud import documentai_v1 as documentai
+
 def parse_uploaded_documents(tool_context: ToolContext) -> dict:
+    """Parse all uploaded documents using Document AI Layout Parser."""
+    client = documentai.DocumentProcessorServiceClient()
+    processor_name = f"projects/{PROJECT_ID}/locations/{LOCATION}/processors/{PROCESSOR_ID}"
+
     artifact_names = tool_context.list_artifacts()
     parsed = {"text_sections": [], "tables": []}
+
     for name in artifact_names:
         artifact = tool_context.load_artifact(name)
         file_bytes = artifact.inline_data.data
-        if name.endswith('.pdf'):
-            text, tables = _parse_pdf(file_bytes)
-            ...
-        elif name.endswith(('.xlsx', '.csv')):
-            tables = _parse_spreadsheet(file_bytes, name)
-            ...
-        elif name.endswith('.docx'):
-            text = _parse_docx(file_bytes)
-            ...
+        mime_type = _get_mime_type(name)  # application/pdf, etc.
+
+        # Send to Document AI Layout Parser
+        request = documentai.ProcessRequest(
+            name=processor_name,
+            raw_document=documentai.RawDocument(content=file_bytes, mime_type=mime_type),
+            process_options=documentai.ProcessOptions(
+                layout_config=documentai.ProcessOptions.LayoutConfig(
+                    chunking_config=documentai.ProcessOptions.LayoutConfig.ChunkingConfig(
+                        chunk_size=1000,
+                        include_ancestor_headings=True,  # preserves section context
+                    )
+                )
+            ),
+        )
+        result = client.process_document(request=request)
+
+        # Layout Parser returns markdown natively in chunked_document
+        for chunk in result.document.chunked_document.chunks:
+            parsed["text_sections"].append({
+                "source": name,
+                "content": chunk.content,          # already markdown
+                "page_span": chunk.page_span,
+            })
+
+        # Extract tables separately for chart agents
+        for page in result.document.pages:
+            for table in page.tables:
+                parsed["tables"].append(_extract_table(table, name))
+
     tool_context.state["parsed_documents"] = parsed
-    tool_context.state["parsed_tables_json"] = _tables_to_json(parsed["tables"])
+    tool_context.state["parsed_tables_json"] = json.dumps(parsed["tables"])
 ```
+
+**Setup required**: Create a Layout Parser processor in Google Cloud Console → Document AI → Create Processor → "Layout Parser". Store the processor ID in `.env`.
 
 ### Step 3: Chart Generator Tools (`tools/chart_generator.py`)
 
 - Implement ADK tool functions: `generate_bar_chart()`, `generate_line_chart()`, `generate_pie_chart()`
-- Accept structured JSON data + slide_number
-- Render with matplotlib (non-interactive `Agg` backend), save PNG as ADK artifact
-- Store image artifact filename in `state["slide_XX_chart_image"]`
-- Shared style config (colors, fonts, DPI) for consistent branding
+- Accept structured JSON data + slide_number + chart description
+- **Primary path**: Call Gemini 3 Pro Image (`gemini-3-pro-image-preview`) with detailed prompt including exact data values, style instructions, and chart type
+- **Validation**: Use Gemini to OCR/verify the generated image — compare rendered numbers against source data JSON
+- **Fallback**: If validation fails, render with matplotlib (non-interactive `Agg` backend) for guaranteed accuracy
+- Save result as ADK artifact, store filename in `state["slide_XX_chart_image"]`
+- Shared style prompt template for consistent branding across Gemini-generated charts
 
 ```python
+from google import genai
+from google.genai import types as genai_types
+
+CHART_STYLE_PROMPT = """Professional financial report chart. Clean design,
+dark navy (#1A3C6E) headers, blue (#2E86AB) bars/lines, white background.
+Sans-serif font. Clear axis labels. Value labels on each data point.
+High resolution, presentation-ready. 16:9 aspect ratio."""
+
 def generate_bar_chart(data_json: str, slide_number: int, tool_context: ToolContext) -> dict:
     data = json.loads(data_json)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.bar(data["categories"], data["values"], color='#2E86AB')
-    ax.set_title(data["title"])
-    # ... styling, value labels
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png', dpi=150)
-    plt.close(fig)
-    tool_context.save_artifact(f"slide_{slide_number:02d}_chart.png", ...)
-    tool_context.state[f"slide_{slide_number:02d}_chart_image"] = filename
+
+    # Step 1: Try Gemini image generation
+    prompt = f"""{CHART_STYLE_PROMPT}
+    Create a bar chart with title: "{data['title']}"
+    X-axis label: "{data['x_label']}", Y-axis label: "{data['y_label']}"
+    Categories and exact values (render these numbers precisely):
+    {chr(10).join(f'  - {c}: {v}' for c, v in zip(data['categories'], data['values']))}
+    """
+    try:
+        client = genai.Client()
+        response = client.models.generate_content(
+            model="gemini-3-pro-image-preview",
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(response_modalities=["Image"]),
+        )
+        image_bytes = _extract_image_bytes(response)
+
+        # Step 2: Validate — ask Gemini to read back the numbers from the image
+        if _validate_chart_numbers(client, image_bytes, data):
+            _save_chart_artifact(tool_context, slide_number, image_bytes)
+            return {"status": "success", "method": "gemini_image_gen"}
+    except Exception:
+        pass  # Fall through to matplotlib
+
+    # Step 3: Fallback to matplotlib
+    image_bytes = _render_matplotlib_bar_chart(data)
+    _save_chart_artifact(tool_context, slide_number, image_bytes)
+    return {"status": "success", "method": "matplotlib_fallback"}
+
+def _validate_chart_numbers(client, image_bytes, source_data) -> bool:
+    """Ask Gemini to read the chart image and verify numbers match source data."""
+    response = client.models.generate_content(
+        model="gemini-3-pro-preview",
+        contents=[
+            genai_types.Part.from_data(data=image_bytes, mime_type="image/png"),
+            "Read all numeric values visible in this chart. Return them as JSON."
+        ],
+    )
+    # Compare extracted numbers against source_data values
+    # Return True if all key values match within tolerance
+    ...
 ```
+
+**Validation approach**: Use Gemini 3 Pro (text model) to OCR the generated chart image and extract numbers. Compare against the source `data_json`. If key values don't match within a small tolerance (e.g., rounding), fall back to matplotlib.
 
 ### Step 4: Financial Calculation Tool (`tools/financial_calc.py`)
 
@@ -220,7 +336,7 @@ def create_slide_agents() -> list[LlmAgent]:
             tools.append(calculate_financial_metrics)
         agent = LlmAgent(
             name=f"SlideAgent_{spec.slide_number:02d}",
-            model="gemini-2.5-flash-preview-05-20",
+            model="gemini-2.5-pro",
             instruction=spec.prompt,
             tools=tools,
             output_key=f"slide_{spec.slide_number:02d}_content",
@@ -276,16 +392,18 @@ root_agent = SequentialAgent(
 
 ```
 google-adk>=1.0.0
+google-cloud-documentai>=2.20
+google-cloud-documentai-toolbox>=0.13
 pandas>=2.0
 openpyxl>=3.1
-python-docx>=1.0
-pdfplumber>=0.10
 matplotlib>=3.8
 python-pptx>=0.6.23
 weasyprint>=60
 markdown>=3.5
 Jinja2>=3.1
 ```
+
+> **Note**: `pdfplumber`, `python-docx` removed — Document AI Layout Parser handles all formats natively (PDF, DOCX, XLSX, PPTX).
 
 ---
 
