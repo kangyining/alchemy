@@ -1,11 +1,9 @@
 """Balance Sheet Summary slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial data extraction specialist preparing a balance sheet summary.
 
-From the source documents ({parsed_documents}) and tables ({parsed_tables_json}), extract key balance sheet items.
-
-Present as a markdown table:
+The full document content and tables have been provided above.
+Extract key balance sheet items and present as a markdown table:
 | Item | Current Period | Prior Period |
 |------|---------------|-------------|
 | Total Assets | $X.XX | $X.XX |

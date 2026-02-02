@@ -4,7 +4,8 @@ Extends BaseAgent to run Document AI parsing directly, then writes
 the results to session state via event state_delta.
 """
 
-import json
+import hashlib
+import logging
 from collections.abc import AsyncGenerator
 
 from google.adk.agents.base_agent import BaseAgent
@@ -17,6 +18,8 @@ from report_agents.tools.document_parser import (
     _get_mime_type,
     parse_documents,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionAgent(BaseAgent):
@@ -46,24 +49,39 @@ class IngestionAgent(BaseAgent):
                         files.append(
                             (name, artifact.inline_data.data, _get_mime_type(name))
                         )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to load artifact '%s': %s", name, e)
 
+        # Fallback: collect inline files from user_content
         if not files:
             files = _collect_inline_files(ctx.user_content)
+
+        # Also scan session history for any file parts we may have missed
+        if not files:
+            for event in ctx.session.events:
+                if event.content and event.content.parts:
+                    files.extend(_collect_inline_files(event.content))
+            # Deduplicate by content hash (same data may appear in multiple events)
+            seen: set[str] = set()
+            unique_files = []
+            for name, data, mime in files:
+                content_hash = hashlib.sha256(data).hexdigest()
+                if content_hash not in seen:
+                    seen.add(content_hash)
+                    unique_files.append((name, data, mime))
+            files = unique_files
+
+        logger.info("IngestionAgent collected %d file(s): %s",
+                     len(files), [f[0] for f in files])
 
         # 2. Run deterministic Document AI parsing
         result = await parse_documents(files)
 
         # 3. Emit state delta so downstream agents can read parsed data
         state_delta = {
-            "parsed_documents": result.get("parsed_documents", ""),
+            "full_document_context": result.get("full_document_context", ""),
+            "summary_document_context": result.get("summary_document_context", ""),
             "parsed_tables_json": result.get("parsed_tables_json", "[]"),
-            "document_sources": result.get("document_sources", []),
-            "ingestion_summary": json.dumps({
-                k: v for k, v in result.items()
-                if k not in ("parsed_documents", "parsed_tables_json")
-            }, default=str),
         }
 
         actions = EventActions(state_delta=state_delta)

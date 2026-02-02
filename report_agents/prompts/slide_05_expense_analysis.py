@@ -1,9 +1,9 @@
 """Expense Analysis slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial data extraction specialist.
 
-From the source documents ({parsed_documents}) and tables ({parsed_tables_json}), find the expense breakdown by category (e.g., COGS, SG&A, R&D, Depreciation).
+The full document content and tables have been provided above.
+Find the expense breakdown by category (e.g., COGS, SG&A, R&D, Depreciation).
 
 Extract the data as structured JSON and call the generate_pie_chart tool with it.
 

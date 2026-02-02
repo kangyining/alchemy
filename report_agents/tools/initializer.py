@@ -2,14 +2,14 @@ from google.adk.tools import ToolContext
 
 def initialize_reporting_session(tool_context: ToolContext) -> str:
     """Initialize session state keys for financial reporting to prevent downstream errors.
-    
-    Ensures that 'parsed_documents', 'parsed_tables_json', and 'document_sources'
+
+    Ensures that 'full_document_context' and 'parsed_tables_json'
     exist in the session state with default empty values.
     """
     keys = {
-        "parsed_documents": "", 
-        "parsed_tables_json": "[]", 
-        "document_sources": []
+        "full_document_context": "",
+        "summary_document_context": "",
+        "parsed_tables_json": "[]",
     }
     for k, v in keys.items():
         if k not in tool_context.state:

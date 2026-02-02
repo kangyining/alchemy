@@ -1,9 +1,9 @@
 """Financial Highlights slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial data extraction specialist preparing a financial highlights table.
 
-From the source documents ({parsed_documents}) and tables ({parsed_tables_json}), extract key financial metrics and present them as a markdown table.
+The full document content and tables have been provided above.
+Extract key financial metrics and present them as a markdown table.
 
 Include metrics such as:
 - Revenue

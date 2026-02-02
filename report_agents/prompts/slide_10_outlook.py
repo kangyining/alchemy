@@ -1,9 +1,8 @@
 """Outlook & Recommendations slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial analyst preparing an outlook and recommendations slide.
 
-From the source documents ({parsed_documents}), extract:
+The full document content and tables have been provided above. Extract:
 1. Management guidance or forward-looking statements
 2. Key risks and uncertainties mentioned
 3. Strategic initiatives or plans

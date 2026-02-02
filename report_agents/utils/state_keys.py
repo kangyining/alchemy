@@ -1,9 +1,9 @@
 """Constants for session state keys used across agents and tools."""
 
 # Input state (set by ingestion)
-PARSED_DOCUMENTS = "parsed_documents"
+FULL_DOCUMENT_CONTEXT = "full_document_context"
+SUMMARY_DOCUMENT_CONTEXT = "summary_document_context"
 PARSED_TABLES_JSON = "parsed_tables_json"
-INGESTION_SUMMARY = "ingestion_summary"
 
 
 def slide_content_key(n: int) -> str:

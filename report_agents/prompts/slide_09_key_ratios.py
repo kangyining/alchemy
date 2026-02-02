@@ -1,9 +1,9 @@
 """Key Financial Ratios slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial data extraction specialist.
 
-From the source documents ({parsed_documents}) and tables ({parsed_tables_json}), extract or compute key financial ratios using the calculate_financial_metrics tool.
+The full document content and tables have been provided above.
+Extract or compute key financial ratios using the calculate_financial_metrics tool.
 
 Present as a markdown table:
 | Ratio | Current | Prior | Change |

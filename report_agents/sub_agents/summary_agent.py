@@ -1,21 +1,26 @@
-"""Simple summary agent that condenses all parsed documents into one paragraph."""
+"""Summary agent that condenses all parsed documents.
+
+Not currently used in the main pipeline but available for future use.
+Document content is injected via the before_model_callback (context stuffing).
+"""
 
 from google.adk.agents import LlmAgent
 
-from report_agents.utils.callbacks import prepare_slide_request
+from report_agents.utils.callbacks import prepare_full_context_request, log_token_usage
 
 summary_agent = LlmAgent(
     name="SummaryAgent",
     model="gemini-3-pro-preview",
     instruction="""You are a document summarization assistant.
 
-Read the following parsed document content and produce a single concise paragraph
-that summarizes the key points of all uploaded documents.
+The full document content and tables have been provided above.
 
-Document content:
-{parsed_documents}
+From the provided content, produce a single concise paragraph that summarizes
+the key points of all uploaded documents.
 
 Output ONLY the summary paragraph, nothing else.""",
     output_key="document_summary",
-    before_model_callback=prepare_slide_request,
+    tools=[],
+    before_model_callback=prepare_full_context_request,
+    after_model_callback=log_token_usage,
 )

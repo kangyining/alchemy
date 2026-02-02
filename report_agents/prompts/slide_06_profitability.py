@@ -1,9 +1,9 @@
 """Profitability Trends slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial data extraction specialist.
 
-From the source documents ({parsed_documents}) and tables ({parsed_tables_json}), find profitability metrics over multiple periods (quarters or years).
+The full document content and tables have been provided above.
+Find profitability metrics over multiple periods (quarters or years).
 
 Extract the data as structured JSON and call the generate_line_chart tool with it.
 

@@ -1,9 +1,9 @@
 """Cash Flow Analysis slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial data extraction specialist.
 
-From the source documents ({parsed_documents}) and tables ({parsed_tables_json}), extract cash flow statement data.
+The full document content and tables have been provided above.
+Extract cash flow statement data.
 
 This is a MIXED slide — you should:
 1. Extract cash flow data (Operating, Investing, Financing) and call the generate_bar_chart tool.

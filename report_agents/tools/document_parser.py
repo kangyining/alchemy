@@ -15,6 +15,17 @@ PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("DOCAI_LOCATION", "us")
 PROCESSOR_ID = os.environ.get("DOCAI_PROCESSOR_ID", "")
 
+_docai_client: documentai.DocumentProcessorServiceClient | None = None
+
+
+def _get_docai_client() -> documentai.DocumentProcessorServiceClient:
+    """Get or create a cached Document AI client."""
+    global _docai_client
+    if _docai_client is None:
+        _docai_client = documentai.DocumentProcessorServiceClient()
+    return _docai_client
+
+
 MIME_TYPE_MAP = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -97,19 +108,19 @@ async def parse_documents(
         files: List of (filename, raw_bytes, mime_type) tuples.
 
     Returns:
-        Dict with keys: status, parsed_documents, parsed_tables_json,
-        document_sources, documents_parsed, text_sections, tables_found, errors.
+        Dict with keys: status, full_document_context, parsed_tables_json,
+        documents_parsed, text_sections, tables_found, errors.
     """
     if not files:
         return {
             "status": "error",
             "message": "No documents were detected. Please upload files first.",
-            "parsed_documents": "",
+            "full_document_context": "",
+            "summary_document_context": "",
             "parsed_tables_json": "[]",
-            "document_sources": [],
         }
 
-    client = documentai.DocumentProcessorServiceClient()
+    client = _get_docai_client()
     processor_name = (
         f"projects/{PROJECT_ID}/locations/{LOCATION}/processors/{PROCESSOR_ID}"
     )
@@ -158,21 +169,97 @@ async def parse_documents(
         except Exception as e:
             errors.append({"file": name, "error": str(e)})
 
-    # Build concatenated text
-    all_text_parts = []
-    for section in parsed["text_sections"]:
-        all_text_parts.append(
-            f"--- Source: {section['source']} ---\n{section['content']}"
-        )
-    full_text = "\n\n".join(all_text_parts)
+    # Build full formatted document context string
+    full_document_context = _build_full_document_context(
+        parsed["text_sections"], parsed["tables"]
+    )
+    # Build shorter summary context for TEXT-only slides (cover, exec summary, outlook)
+    summary_document_context = _build_summary_document_context(
+        parsed["text_sections"]
+    )
 
     return {
         "status": "success",
-        "parsed_documents": full_text,
+        "full_document_context": full_document_context,
+        "summary_document_context": summary_document_context,
         "parsed_tables_json": json.dumps(parsed["tables"], default=str),
-        "document_sources": [name for name, _, _ in files],
         "documents_parsed": len(files) - len(errors),
         "text_sections": len(parsed["text_sections"]),
         "tables_found": len(parsed["tables"]),
         "errors": errors if errors else None,
     }
+
+
+def _build_full_document_context(
+    text_sections: list[dict], tables: list[dict]
+) -> str:
+    """Build a formatted markdown string from text sections and tables.
+
+    Groups text by source file and renders tables as markdown.
+    This is built once during ingestion and stored in state for slide agents.
+    """
+    if not text_sections and not tables:
+        return ""
+
+    parts: list[str] = ["## SOURCE DOCUMENTS\n"]
+
+    # Group text sections by source file
+    by_source: dict[str, list[str]] = {}
+    for section in text_sections:
+        src = section.get("source", "unknown")
+        by_source.setdefault(src, []).append(section.get("content", ""))
+
+    for src, contents in by_source.items():
+        parts.append(f"### {src}\n")
+        parts.extend(contents)
+        parts.append("")
+
+    # Render tables as markdown
+    if tables:
+        parts.append("## EXTRACTED TABLES\n")
+        for i, table in enumerate(tables):
+            src = table.get("source", "unknown")
+            headers = table.get("headers", [])
+            rows = table.get("rows", [])
+            parts.append(f"### Table {i + 1} (from {src})")
+            if headers:
+                header_row = headers[0] if headers else []
+                if header_row:
+                    parts.append("| " + " | ".join(header_row) + " |")
+                    parts.append("| " + " | ".join("---" for _ in header_row) + " |")
+            for row in rows:
+                parts.append("| " + " | ".join(row) + " |")
+            parts.append("")
+
+    return "\n".join(parts)
+
+
+# Maximum text sections per source file to include in the summary context.
+_SUMMARY_MAX_SECTIONS_PER_SOURCE = 3
+
+
+def _build_summary_document_context(text_sections: list[dict]) -> str:
+    """Build a shorter document context with only the first few text sections.
+
+    Used for TEXT-only slides (Cover, Executive Summary, Outlook) that don't
+    need full financial tables or deep detail — just company name, period,
+    key highlights, and forward-looking statements.  Skips tables entirely.
+    """
+    if not text_sections:
+        return ""
+
+    parts: list[str] = ["## SOURCE DOCUMENTS (SUMMARY)\n"]
+
+    by_source: dict[str, list[str]] = {}
+    for section in text_sections:
+        src = section.get("source", "unknown")
+        by_source.setdefault(src, []).append(section.get("content", ""))
+
+    for src, contents in by_source.items():
+        parts.append(f"### {src}\n")
+        parts.extend(contents[:_SUMMARY_MAX_SECTIONS_PER_SOURCE])
+        if len(contents) > _SUMMARY_MAX_SECTIONS_PER_SOURCE:
+            parts.append(f"\n[... {len(contents) - _SUMMARY_MAX_SECTIONS_PER_SOURCE} more sections omitted ...]")
+        parts.append("")
+
+    return "\n".join(parts)

@@ -1,8 +1,19 @@
 """Callbacks for ADK agent hooks."""
 
+import logging
+import time
+
 from google.adk.agents.callback_context import CallbackContext
-from google.adk.models import LlmRequest
+from google.adk.models import LlmRequest, LlmResponse
 from google.genai import types as genai_types
+
+logger = logging.getLogger(__name__)
+
+# Backoff constants for on_model_error_callback (flat 60s for TPM window)
+BACKOFF_STATE_KEY = "_llm_backoff"
+BACKOFF_BASE_SECONDS = 60.0
+BACKOFF_MAX_SECONDS = 60.0
+BACKOFF_MULTIPLIER = 1.0
 
 
 def strip_file_parts(
@@ -33,38 +44,120 @@ def strip_file_parts(
             ]
 
 
-def inject_state_into_prompt(
+def _inject_context(
+    callback_context: CallbackContext,
+    llm_request: LlmRequest,
+    state_key: str,
+) -> None:
+    """Strip file parts and inject document context from the given state key."""
+    strip_file_parts(callback_context, llm_request)
+    context_text = callback_context.state.get(state_key, "")
+    if context_text:
+        context_content = genai_types.Content(
+            role="user",
+            parts=[genai_types.Part.from_text(text=context_text)],
+        )
+        llm_request.contents.insert(0, context_content)
+
+
+def prepare_full_context_request(
     callback_context: CallbackContext, llm_request: LlmRequest
 ) -> None:
-    """Replace {parsed_documents} and {parsed_tables_json} placeholders
-    in the system instruction with actual values from session state.
+    """before_model_callback for TABLE/CHART/MIXED slides.
+
+    Injects the full document context (text + tables) so the agent has
+    access to all source data for extracting exact figures.
     """
-    if not llm_request.config or not llm_request.config.system_instruction:
-        return
+    _inject_context(callback_context, llm_request, "full_document_context")
 
-    si = llm_request.config.system_instruction
-    state = callback_context.state
 
-    replacements = {
-        "{parsed_documents}": state.get("parsed_documents", "")
-            or "[No parsed documents found in session state]",
-        "{parsed_tables_json}": state.get("parsed_tables_json", "[]"),
+def prepare_summary_context_request(
+    callback_context: CallbackContext, llm_request: LlmRequest
+) -> None:
+    """before_model_callback for TEXT-only slides (Cover, Exec Summary, Outlook).
+
+    Injects a shorter summary context (first few sections per source, no tables)
+    to reduce token usage on slides that only need high-level information.
+    """
+    _inject_context(callback_context, llm_request, "summary_document_context")
+
+
+def log_token_usage(
+    callback_context: CallbackContext, llm_response: LlmResponse
+) -> None:
+    """Log token usage after each LLM call.
+
+    Reads usage_metadata from LlmResponse and logs input/output token counts.
+    """
+    agent_name = callback_context.agent_name
+    usage = llm_response.usage_metadata
+
+    if usage:
+        prompt_tokens = usage.prompt_token_count or 0
+        output_tokens = usage.candidates_token_count or 0
+        cached_tokens = usage.cached_content_token_count or 0
+        logger.info(
+            "TOKEN_USAGE | agent=%s | input=%d | output=%d | cached=%d | total=%d",
+            agent_name,
+            prompt_tokens,
+            output_tokens,
+            cached_tokens,
+            prompt_tokens + output_tokens,
+        )
+    else:
+        logger.warning("TOKEN_USAGE | agent=%s | no usage metadata available", agent_name)
+
+
+def handle_model_error(
+    callback_context: CallbackContext,
+    llm_request: LlmRequest,
+    error: Exception,
+) -> LlmResponse | None:
+    """Handle LLM errors with flat 60s backoff for rate-limit (429) errors.
+
+    This is wired as on_model_error_callback on slide agents. When a 429 /
+    resource_exhausted error is caught, it sleeps 60s (one TPM window) and
+    returns a fallback LlmResponse so the agent can retry on the next turn.
+    Non-rate-limit errors are re-raised (return None).
+    """
+    error_text = str(error).lower()
+    is_rate_limit = (
+        "429" in error_text
+        or "resource_exhausted" in error_text
+        or "rate limit" in error_text
+    )
+
+    if not is_rate_limit:
+        logger.error("LLM_ERROR | agent=%s | error=%s", callback_context.agent_name, error)
+        return None  # Let ADK re-raise the exception
+
+    # Compute backoff delay
+    info = callback_context.state.get(BACKOFF_STATE_KEY, {})
+    attempt = int(info.get("attempt", 0)) + 1
+    delay = min(
+        BACKOFF_MAX_SECONDS,
+        BACKOFF_BASE_SECONDS * (BACKOFF_MULTIPLIER ** (attempt - 1)),
+    )
+    callback_context.state[BACKOFF_STATE_KEY] = {
+        "attempt": attempt,
+        "until": time.time() + delay,
     }
 
-    if isinstance(si, str):
-        for placeholder, value in replacements.items():
-            si = si.replace(placeholder, value)
-        llm_request.config.system_instruction = si
-    elif hasattr(si, "parts"):
-        for part in si.parts:
-            if part.text:
-                for placeholder, value in replacements.items():
-                    part.text = part.text.replace(placeholder, value)
+    logger.warning(
+        "RATE_LIMIT | agent=%s | attempt=%d | sleeping %.1fs | error=%s",
+        callback_context.agent_name,
+        attempt,
+        delay,
+        error,
+    )
+    time.sleep(delay)
 
-
-def prepare_slide_request(
-    callback_context: CallbackContext, llm_request: LlmRequest
-) -> None:
-    """Composite callback: strip file parts then inject state into prompt."""
-    strip_file_parts(callback_context, llm_request)
-    inject_state_into_prompt(callback_context, llm_request)
+    # Return a fallback response so the agent retries on the next turn
+    return LlmResponse(
+        content=genai_types.Content(
+            role="model",
+            parts=[genai_types.Part.from_text(
+                text="Rate limit hit — retrying after backoff. Please continue with the task."
+            )],
+        ),
+    )

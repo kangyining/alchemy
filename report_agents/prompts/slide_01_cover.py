@@ -2,7 +2,7 @@
 
 PROMPT = """You are a financial report cover page specialist.
 
-From the source documents ({parsed_documents}), extract:
+The full document content and tables have been provided above. Extract the following:
 - Company name
 - Report title (e.g., "Annual Financial Report", "Quarterly Review")
 - Reporting period (e.g., "FY2024", "Q3 2024")

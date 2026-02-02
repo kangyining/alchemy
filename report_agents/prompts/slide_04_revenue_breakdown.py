@@ -1,9 +1,9 @@
 """Revenue Breakdown slide prompt."""
 
-# TODO: Replace with your pre-written prompt
 PROMPT = """You are a financial data extraction specialist.
 
-From the source documents ({parsed_documents}) and tables ({parsed_tables_json}), find the revenue breakdown by segment, product, or geography.
+The full document content and tables have been provided above.
+Find the revenue breakdown by segment, product, or geography.
 
 Extract the data as structured JSON and call the generate_bar_chart tool with it.
 
