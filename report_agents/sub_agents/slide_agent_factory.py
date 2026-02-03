@@ -11,7 +11,7 @@ from google.adk.events import Event
 from google.adk.models.google_llm import Gemini
 from google.genai import types as genai_types
 
-from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType
+from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType, ContextType
 from report_agents.tools.chart_generator import make_chart_tool
 from report_agents.tools.financial_calc import calculate_financial_metrics
 from report_agents.utils.callbacks import (
@@ -37,7 +37,7 @@ MODEL = Gemini(
 )
 
 # Seconds to pause between slide agents to spread token usage across TPM windows
-INTER_SLIDE_DELAY_SECONDS = 10
+INTER_SLIDE_DELAY_SECONDS = 20
 
 
 class ThrottleAgent(BaseAgent):
@@ -88,8 +88,8 @@ def create_slide_agents() -> list[BaseAgent]:
             if chart_type_str:
                 tools.append(make_chart_tool(chart_type_str, spec.slide_number))
 
-        # TEXT slides use summary context; data-heavy slides use full context
-        if spec.slide_type == SlideType.TEXT:
+        # Select context callback based on context_type (not slide_type)
+        if spec.context_type == ContextType.SUMMARY:
             before_callback = prepare_summary_context_request
         else:
             before_callback = prepare_full_context_request

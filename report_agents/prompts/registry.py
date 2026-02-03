@@ -9,6 +9,7 @@ from enum import Enum
 
 
 class SlideType(Enum):
+    """Output format of the slide - determines which tools are attached."""
     TEXT = "text"
     TABLE = "table"
     CHART = "chart"
@@ -22,12 +23,19 @@ class ChartType(Enum):
     NONE = "none"
 
 
+class ContextType(Enum):
+    """Input context size - determines how much document context is injected."""
+    SUMMARY = "summary"  # First few sections, no tables (for high-level slides)
+    FULL = "full"        # Complete document context with all tables
+
+
 @dataclass
 class SlideSpec:
     slide_number: int
     title: str
     slide_type: SlideType
     chart_type: ChartType
+    context_type: ContextType
     prompt: str
 
 
@@ -61,6 +69,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Cover Page",
         slide_type=SlideType.TEXT,
         chart_type=ChartType.NONE,
+        context_type=ContextType.SUMMARY,
         prompt=SLIDE_01_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -68,6 +77,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Executive Summary",
         slide_type=SlideType.TEXT,
         chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,  # Needs revenue/income figures from tables
         prompt=SLIDE_02_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -75,6 +85,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Financial Highlights",
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,
         prompt=SLIDE_03_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -82,6 +93,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Revenue Breakdown",
         slide_type=SlideType.CHART,
         chart_type=ChartType.BAR,
+        context_type=ContextType.FULL,
         prompt=SLIDE_04_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -89,6 +101,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Expense Analysis",
         slide_type=SlideType.CHART,
         chart_type=ChartType.PIE,
+        context_type=ContextType.FULL,
         prompt=SLIDE_05_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -96,6 +109,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Profitability Trends",
         slide_type=SlideType.CHART,
         chart_type=ChartType.LINE,
+        context_type=ContextType.FULL,
         prompt=SLIDE_06_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -103,6 +117,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Balance Sheet Summary",
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,
         prompt=SLIDE_07_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -110,6 +125,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Cash Flow Analysis",
         slide_type=SlideType.MIXED,
         chart_type=ChartType.BAR,
+        context_type=ContextType.FULL,
         prompt=SLIDE_08_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -117,6 +133,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Key Financial Ratios",
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,
         prompt=SLIDE_09_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
@@ -124,6 +141,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         title="Outlook & Recommendations",
         slide_type=SlideType.TEXT,
         chart_type=ChartType.NONE,
+        context_type=ContextType.SUMMARY,
         prompt=SLIDE_10_PROMPT + ACCURACY_SUFFIX,
     ),
 ]
