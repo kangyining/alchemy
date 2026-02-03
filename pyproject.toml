@@ -15,6 +15,7 @@ dependencies = [
     "weasyprint>=60",
     "markdown>=3.5",
     "Jinja2>=3.1",
+    "pypdf>=4.0",
 ]
 
 [project.optional-dependencies]

@@ -32,7 +32,7 @@ CHART_TYPE_MAP = {
 MODEL = Gemini(
     model="gemini-3-flash-preview",
     retry_options=genai_types.HttpRetryOptions(
-        initial_delay=60, multiplier=1, max_delay=60, attempts=3,
+        initial_delay=60, max_delay=60, attempts=3,
     ),
 )
 

@@ -1,19 +1,34 @@
 """Document parsing using Google Cloud Document AI Layout Parser."""
 
 import asyncio
+import io
 import json
+import logging
 import os
+import re
 from typing import Optional
 
 from dotenv import load_dotenv
 from google.cloud import documentai_v1 as documentai
 from google.genai import types as genai_types
+from pypdf import PdfReader, PdfWriter
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("DOCAI_LOCATION", "us")
 PROCESSOR_ID = os.environ.get("DOCAI_PROCESSOR_ID", "")
+
+# Document AI online API page limit per request.
+_DOCAI_MAX_PAGES = 15
+
+# Max concurrent Document AI requests (1 = sequential to avoid server-side throttling)
+_DOCAI_MAX_CONCURRENCY = 1
+
+# Seconds to wait between sequential Document AI requests (rate limit spacing)
+_DOCAI_INTER_REQUEST_DELAY = 5.0
 
 _docai_client: documentai.DocumentProcessorServiceClient | None = None
 
@@ -99,10 +114,116 @@ def _collect_inline_files(
     return files
 
 
+def _split_pdf(
+    filename: str, pdf_bytes: bytes,
+) -> list[tuple[str, bytes]]:
+    """Split a PDF into chunks of at most _DOCAI_MAX_PAGES pages.
+
+    Returns a list of (chunk_name, chunk_bytes) tuples.  If the PDF is
+    already within the page limit, it is returned as-is (single element list).
+    """
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    total_pages = len(reader.pages)
+
+    if total_pages <= _DOCAI_MAX_PAGES:
+        return [(filename, pdf_bytes)]
+
+    chunks: list[tuple[str, bytes]] = []
+    for start in range(0, total_pages, _DOCAI_MAX_PAGES):
+        end = min(start + _DOCAI_MAX_PAGES, total_pages)
+        writer = PdfWriter()
+        for page_idx in range(start, end):
+            writer.add_page(reader.pages[page_idx])
+        buf = io.BytesIO()
+        writer.write(buf)
+        chunk_name = f"{filename}_pages_{start + 1}-{end}"
+        chunks.append((chunk_name, buf.getvalue()))
+
+    logger.info(
+        "Split %s (%d pages) into %d chunks of <=%d pages",
+        filename, total_pages, len(chunks), _DOCAI_MAX_PAGES,
+    )
+    return chunks
+
+
+def _original_source(chunk_name: str) -> str:
+    """Map a chunk name back to the original filename.
+
+    'report.pdf_pages_1-15' -> 'report.pdf'
+    'report.pdf'            -> 'report.pdf'
+    """
+    return re.sub(r"_pages_\d+-\d+$", "", chunk_name)
+
+
+async def _process_single_file(
+    name: str,
+    file_bytes: bytes,
+    mime_type: str,
+    processor_name: str,
+    client: documentai.DocumentProcessorServiceClient,
+    semaphore: asyncio.Semaphore,
+    is_first: bool = True,
+) -> tuple[list[dict], list[dict], dict | None]:
+    """Process a single file through Document AI.
+
+    Returns (text_sections, tables, error_or_none).
+    Uses a semaphore to limit concurrent requests.
+    Adds a delay before non-first requests to respect rate limits.
+    """
+    source = _original_source(name)
+    async with semaphore:
+        if not is_first and _DOCAI_INTER_REQUEST_DELAY > 0:
+            logger.info("Waiting %.1fs before next Document AI request...", _DOCAI_INTER_REQUEST_DELAY)
+            await asyncio.sleep(_DOCAI_INTER_REQUEST_DELAY)
+        try:
+            request = documentai.ProcessRequest(
+                name=processor_name,
+                raw_document=documentai.RawDocument(
+                    content=file_bytes, mime_type=mime_type
+                ),
+                process_options=documentai.ProcessOptions(
+                    layout_config=documentai.ProcessOptions.LayoutConfig(
+                        chunking_config=documentai.ProcessOptions.LayoutConfig.ChunkingConfig(
+                            chunk_size=1000,
+                            include_ancestor_headings=True,
+                        )
+                    )
+                ),
+            )
+            result = await asyncio.to_thread(
+                client.process_document, request=request, timeout=600.0
+            )
+            document = result.document
+
+            text_sections: list[dict] = []
+            if document.chunked_document and document.chunked_document.chunks:
+                for chunk in document.chunked_document.chunks:
+                    text_sections.append({"source": source, "content": chunk.content})
+            elif document.text:
+                text_sections.append({"source": source, "content": document.text})
+
+            tables: list[dict] = []
+            for page in document.pages:
+                for table in page.tables:
+                    table_data = _extract_table_text(table, document.text)
+                    table_data["source"] = source
+                    table_data["page"] = page.page_number
+                    tables.append(table_data)
+
+            return text_sections, tables, None
+
+        except Exception as e:
+            logger.error("Failed to parse %s: %s", name, e)
+            return [], [], {"file": name, "error": str(e)}
+
+
 async def parse_documents(
     files: list[tuple[str, bytes, str]],
 ) -> dict:
     """Parse documents using Document AI Layout Parser.
+
+    PDFs over 15 pages are split into chunks.  All files and chunks are
+    processed in parallel via asyncio.gather.
 
     Args:
         files: List of (filename, raw_bytes, mime_type) tuples.
@@ -125,67 +246,56 @@ async def parse_documents(
         f"projects/{PROJECT_ID}/locations/{LOCATION}/processors/{PROCESSOR_ID}"
     )
 
-    parsed = {"text_sections": [], "tables": []}
-    errors = []
-
+    # 1. Split large PDFs into <=15-page chunks; non-PDFs pass through
+    expanded_files: list[tuple[str, bytes, str]] = []
     for name, file_bytes, mime_type in files:
-        try:
-            request = documentai.ProcessRequest(
-                name=processor_name,
-                raw_document=documentai.RawDocument(
-                    content=file_bytes, mime_type=mime_type
-                ),
-                process_options=documentai.ProcessOptions(
-                    layout_config=documentai.ProcessOptions.LayoutConfig(
-                        chunking_config=documentai.ProcessOptions.LayoutConfig.ChunkingConfig(
-                            chunk_size=1000,
-                            include_ancestor_headings=True,
-                        )
-                    )
-                ),
-            )
-            result = await asyncio.to_thread(client.process_document, request=request)
-            document = result.document
+        if mime_type == "application/pdf":
+            for chunk_name, chunk_bytes in _split_pdf(name, file_bytes):
+                expanded_files.append((chunk_name, chunk_bytes, mime_type))
+        else:
+            expanded_files.append((name, file_bytes, mime_type))
 
-            # Extract markdown chunks from Layout Parser
-            if document.chunked_document and document.chunked_document.chunks:
-                for chunk in document.chunked_document.chunks:
-                    parsed["text_sections"].append(
-                        {"source": name, "content": chunk.content}
-                    )
-            elif document.text:
-                parsed["text_sections"].append(
-                    {"source": name, "content": document.text}
-                )
+    logger.info(
+        "Processing %d file(s) / chunk(s) in parallel: %s",
+        len(expanded_files), [f[0] for f in expanded_files],
+    )
 
-            # Extract tables separately for chart agents
-            for page in document.pages:
-                for table in page.tables:
-                    table_data = _extract_table_text(table, document.text)
-                    table_data["source"] = name
-                    table_data["page"] = page.page_number
-                    parsed["tables"].append(table_data)
+    # 2. Process all files/chunks in parallel (with concurrency limit)
+    semaphore = asyncio.Semaphore(_DOCAI_MAX_CONCURRENCY)
+    tasks = [
+        _process_single_file(name, data, mime, processor_name, client, semaphore, is_first=(i == 0))
+        for i, (name, data, mime) in enumerate(expanded_files)
+    ]
+    results = await asyncio.gather(*tasks)
 
-        except Exception as e:
-            errors.append({"file": name, "error": str(e)})
+    # 3. Merge results
+    all_text_sections: list[dict] = []
+    all_tables: list[dict] = []
+    errors: list[dict] = []
+
+    for text_sections, tables, error in results:
+        all_text_sections.extend(text_sections)
+        all_tables.extend(tables)
+        if error:
+            errors.append(error)
 
     # Build full formatted document context string
     full_document_context = _build_full_document_context(
-        parsed["text_sections"], parsed["tables"]
+        all_text_sections, all_tables
     )
     # Build shorter summary context for TEXT-only slides (cover, exec summary, outlook)
     summary_document_context = _build_summary_document_context(
-        parsed["text_sections"]
+        all_text_sections
     )
 
     return {
         "status": "success",
         "full_document_context": full_document_context,
         "summary_document_context": summary_document_context,
-        "parsed_tables_json": json.dumps(parsed["tables"], default=str),
+        "parsed_tables_json": json.dumps(all_tables, default=str),
         "documents_parsed": len(files) - len(errors),
-        "text_sections": len(parsed["text_sections"]),
-        "tables_found": len(parsed["tables"]),
+        "text_sections": len(all_text_sections),
+        "tables_found": len(all_tables),
         "errors": errors if errors else None,
     }
 
