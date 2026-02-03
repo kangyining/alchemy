@@ -2,8 +2,10 @@
 
 PROMPT = """You are a financial data extraction specialist.
 
-The full document content and tables have been provided above.
-Find the revenue breakdown by segment, product, or geography.
+Use the `query_financial_data` tool to find revenue breakdown data. Example queries:
+- "Get revenue by segment"
+- "Show revenue breakdown by product or geography"
+- "Find segment revenue figures"
 
 Extract the data as structured JSON and call the generate_bar_chart tool with it.
 

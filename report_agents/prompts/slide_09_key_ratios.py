@@ -2,8 +2,12 @@
 
 PROMPT = """You are a financial data extraction specialist.
 
-The full document content and tables have been provided above.
-Extract or compute key financial ratios using the calculate_financial_metrics tool.
+Use the `query_financial_data` tool to fetch the data needed for ratio calculations. Example queries:
+- "Get current assets, current liabilities, total debt, total equity"
+- "Show revenue, net income, total assets for ratio calculations"
+- "Find gross profit and operating expenses"
+
+Then compute key financial ratios using the calculate_financial_metrics tool.
 
 Present as a markdown table:
 | Ratio | Current | Prior | Change |

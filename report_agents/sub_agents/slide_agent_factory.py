@@ -13,6 +13,7 @@ from google.genai import types as genai_types
 
 from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType, ContextType
 from report_agents.tools.chart_generator import make_chart_tool
+from report_agents.tools.data_query import query_financial_data, list_available_tables
 from report_agents.tools.financial_calc import calculate_financial_metrics
 from report_agents.utils.callbacks import (
     prepare_full_context_request,
@@ -37,7 +38,7 @@ MODEL = Gemini(
 )
 
 # Seconds to pause between slide agents to spread token usage across TPM windows
-INTER_SLIDE_DELAY_SECONDS = 20
+INTER_SLIDE_DELAY_SECONDS = 10
 
 
 class ThrottleAgent(BaseAgent):
@@ -82,6 +83,10 @@ def create_slide_agents() -> list[BaseAgent]:
             ))
 
         tools = [calculate_financial_metrics]
+
+        # Add query tools for FULL context slides (TABLE/CHART/MIXED)
+        if spec.context_type == ContextType.FULL:
+            tools.extend([query_financial_data, list_available_tables])
 
         if spec.slide_type in (SlideType.CHART, SlideType.MIXED):
             chart_type_str = CHART_TYPE_MAP.get(spec.chart_type)

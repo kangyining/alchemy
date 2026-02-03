@@ -2,7 +2,11 @@
 
 PROMPT = """You are a financial data extraction specialist preparing a balance sheet summary.
 
-The full document content and tables have been provided above.
+Use the `query_financial_data` tool to fetch balance sheet data. Example queries:
+- "Get total assets, total liabilities, total equity"
+- "Show balance sheet items for current and prior period"
+- "Find cash, debt, and equity figures"
+
 Extract key balance sheet items and present as a markdown table:
 | Item | Current Period | Prior Period |
 |------|---------------|-------------|

@@ -2,8 +2,10 @@
 
 PROMPT = """You are a financial data extraction specialist.
 
-The full document content and tables have been provided above.
-Find profitability metrics over multiple periods (quarters or years).
+Use the `query_financial_data` tool to find profitability data. Example queries:
+- "Get gross margin by quarter"
+- "Show profitability metrics over time"
+- "Find operating margin and net margin trends"
 
 Extract the data as structured JSON and call the generate_line_chart tool with it.
 

@@ -5,6 +5,7 @@ as artifacts, and emits the result via event state_delta.
 """
 
 import json
+import logging
 from collections.abc import AsyncGenerator
 
 from google.adk.agents.base_agent import BaseAgent
@@ -12,7 +13,10 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 from google.genai import types as genai_types
 
+from report_agents.services.database_service import FinancialDataStore
 from report_agents.tools.report_builder import assemble_report
+
+logger = logging.getLogger(__name__)
 
 
 class AssemblyAgent(BaseAgent):
@@ -71,10 +75,20 @@ class AssemblyAgent(BaseAgent):
             )
             artifact_delta["financial_report.pdf"] = version
 
+        # Cleanup session-scoped SQLite database after assembly completes
+        db_cleanup_status = "skipped"
+        try:
+            FinancialDataStore(ctx.session.id).cleanup()
+            db_cleanup_status = "deleted"
+        except Exception as e:
+            logger.warning("DB cleanup failed for session %s: %s", ctx.session.id, e)
+            db_cleanup_status = "error"
+
         summary = {
             "status": result.get("status", "unknown"),
             "slides_generated": result.get("slides_generated", 0),
             "artifacts": list(artifact_delta.keys()),
+            "db_cleanup": db_cleanup_status,
         }
 
         actions = EventActions(

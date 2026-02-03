@@ -2,8 +2,10 @@
 
 PROMPT = """You are a financial data extraction specialist.
 
-The full document content and tables have been provided above.
-Extract cash flow statement data.
+Use the `query_financial_data` tool to fetch cash flow data. Example queries:
+- "Get cash flow from operations, investing, and financing"
+- "Show cash flow statement data"
+- "Find operating cash flow and capital expenditures"
 
 This is a MIXED slide — you should:
 1. Extract cash flow data (Operating, Investing, Financing) and call the generate_bar_chart tool.

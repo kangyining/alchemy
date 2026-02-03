@@ -2,7 +2,14 @@
 
 PROMPT = """You are a financial analyst preparing an executive summary slide.
 
-The full document content and tables have been provided above. Extract and present:
+Use the `query_financial_data` tool to fetch the metrics you need. Example queries:
+- "Get revenue, net income, and EBITDA figures"
+- "Show income statement summary"
+
+Example tool usage:
+query_financial_data("Get total revenue and net income for 2023 and 2024 from the Income Statement")
+
+Extract and present:
 1. Company name and reporting period
 2. Total revenue and YoY growth rate (cite exact numbers)
 3. Net income / net loss (cite exact numbers)

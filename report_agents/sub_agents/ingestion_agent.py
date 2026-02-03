@@ -2,6 +2,8 @@
 
 Extends BaseAgent to run Document AI parsing directly, then writes
 the results to session state via event state_delta.
+
+Now also stores parsed DataFrames in SQLite for efficient querying.
 """
 
 import hashlib
@@ -13,6 +15,7 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 from google.genai import types as genai_types
 
+from report_agents.services.database_service import FinancialDataStore
 from report_agents.tools.document_parser import (
     _collect_inline_files,
     _get_mime_type,
@@ -77,10 +80,39 @@ class IngestionAgent(BaseAgent):
         # 2. Run deterministic Document AI parsing
         result = await parse_documents(files)
 
-        # 3. Emit state delta so downstream agents can read parsed data
+        # 3. Store DataFrames in SQLite (0 tokens, pure pandas)
+        session_id = ctx.session.id
+        dataframes = result.get("dataframes", {})
+        table_schemas = ""
+
+        if dataframes:
+            store = FinancialDataStore(session_id)
+            for key, df in dataframes.items():
+                # key format: "source_file:sheet_name"
+                parts = key.split(":", 1)
+                source_file = parts[0]
+                sheet_name = parts[1] if len(parts) > 1 else "Sheet1"
+                store.store_dataframe(df, source_file, sheet_name)
+
+            # Get schema context for LLM (small, ~500 tokens)
+            table_schemas = store.get_schema_context()
+            logger.info(
+                "Stored %d DataFrames in SQLite, schema context: %d chars",
+                len(dataframes),
+                len(table_schemas),
+            )
+
+        # 4. Emit state delta so downstream agents can read parsed data
         state_delta = {
-            "full_document_context": result.get("full_document_context", ""),
+            # NEW: Schema context for query tool (replaces full_document_context for data slides)
+            "table_schemas": table_schemas,
+            "db_path": f"/tmp/report_agents/{session_id}.db",
+            # Full text context excluding spreadsheets (for FULL slides)
+            "full_text_document_context": result.get("full_text_document_context", ""),
+            # Keep summary context for TEXT slides (Cover, Outlook)
             "summary_document_context": result.get("summary_document_context", ""),
+            # Legacy fields (kept for backward compatibility, but not used by new slides)
+            "full_document_context": result.get("full_document_context", ""),
             "parsed_tables_json": result.get("parsed_tables_json", "[]"),
         }
 
@@ -90,7 +122,8 @@ class IngestionAgent(BaseAgent):
             content=genai_types.Content(
                 role="model",
                 parts=[genai_types.Part.from_text(
-                    text=f"Ingestion complete: {result.get('status', 'unknown')}"
+                    text=f"Ingestion complete: {result.get('status', 'unknown')}. "
+                    f"Stored {len(dataframes)} tables in SQLite."
                 )],
             ),
             actions=actions,

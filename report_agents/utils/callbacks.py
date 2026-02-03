@@ -65,10 +65,38 @@ def prepare_full_context_request(
 ) -> None:
     """before_model_callback for TABLE/CHART/MIXED slides.
 
-    Injects the full document context (text + tables) so the agent has
-    access to all source data for extracting exact figures.
+    Injects full text context for non-spreadsheet sources, plus table schema
+    metadata for spreadsheet data so the agent can query as needed.
+
+    This avoids injecting full spreadsheet tables while preserving narrative
+    text from PDFs/docs.
     """
-    _inject_context(callback_context, llm_request, "full_document_context")
+    strip_file_parts(callback_context, llm_request)
+
+    # Inject non-spreadsheet text context (full, untruncated)
+    text_context = callback_context.state.get("full_text_document_context", "")
+
+    # Inject schema metadata for spreadsheet data
+    table_schemas = callback_context.state.get("table_schemas", "")
+    context_blocks: list[str] = []
+    if text_context:
+        context_blocks.append(text_context)
+    if table_schemas:
+        context_blocks.append(
+            f"{table_schemas}\n\n"
+            "Use the `query_financial_data` tool to fetch specific data you need. "
+            "Example queries:\n"
+            "- 'Get revenue and net income figures'\n"
+            "- 'Show all data from the Income Statement sheet'\n"
+            "- 'Find gross profit margin and operating expenses'"
+        )
+
+    if context_blocks:
+        context_content = genai_types.Content(
+            role="user",
+            parts=[genai_types.Part.from_text(text="\n\n".join(context_blocks))],
+        )
+        llm_request.contents.insert(0, context_content)
 
 
 def prepare_summary_context_request(

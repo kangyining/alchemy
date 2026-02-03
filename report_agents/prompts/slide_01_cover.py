@@ -8,6 +8,9 @@ The full document content and tables have been provided above. Extract the follo
 - Reporting period (e.g., "FY2024", "Q3 2024")
 - Date of report
 
+If any field is not explicitly present in the source documents, output
+[NOT FOUND IN SOURCE] for that field. Do NOT infer or guess.
+
 Output as markdown:
 ```
 ## [Company Name]

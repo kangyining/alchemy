@@ -2,8 +2,14 @@
 
 PROMPT = """You are a financial data extraction specialist preparing a financial highlights table.
 
-The full document content and tables have been provided above.
-Extract key financial metrics and present them as a markdown table.
+Use the `query_financial_data` tool to fetch the metrics you need. Example queries:
+- "Get revenue, gross profit, operating income, net income for current and prior periods"
+- "Show all income statement metrics"
+- "Get EPS basic and diluted"
+- "Show total assets and total equity from balance sheet"
+
+Example tool usage:
+query_financial_data("Get Revenue and Net Income for 2023 and 2024 from the Income Statement")
 
 Include metrics such as:
 - Revenue

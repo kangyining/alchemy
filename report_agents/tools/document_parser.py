@@ -93,6 +93,35 @@ def _rows_to_csv(headers: list[str], rows: list[list]) -> str:
     return "\n".join(lines)
 
 
+def _sanitize_column_names(columns: list) -> list[str]:
+    """Minimally clean column names for SQLite-friendly schemas.
+
+    - Replace empty/Unnamed/NaN headers with generated names
+    - Replace non-alphanumeric chars with underscores
+    - Ensure names are unique and don't start with digits
+    """
+    cleaned: list[str] = []
+    seen: dict[str, int] = {}
+    for idx, col in enumerate(columns):
+        name = str(col).strip()
+        lower = name.lower()
+        if not name or lower.startswith("unnamed:") or lower in ("nan", "none"):
+            name = f"col_{idx + 1}"
+        name = re.sub(r"[^a-zA-Z0-9]", "_", name)
+        name = re.sub(r"_+", "_", name).strip("_")
+        if not name:
+            name = f"col_{idx + 1}"
+        name = name.lower()
+        if name[0].isdigit():
+            name = f"col_{name}"
+        count = seen.get(name, 0) + 1
+        seen[name] = count
+        if count > 1:
+            name = f"{name}_{count}"
+        cleaned.append(name)
+    return cleaned
+
+
 def _extract_table_text(table, document_text: str) -> dict:
     """Extract table content from a Document AI table object.
 
@@ -172,13 +201,15 @@ _MAX_ROWS_PER_SHEET = 1500
 
 def _parse_spreadsheet(
     name: str, file_bytes: bytes, mime_type: str,
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict], dict[str, pd.DataFrame]]:
     """Parse Excel/CSV files natively using pandas.
 
-    Returns (text_sections, tables) where each sheet becomes both a text
-    section (CSV format) and a structured table entry.
+    Returns (text_sections, tables, dataframes) where:
+    - text_sections: CSV text for context injection (legacy)
+    - tables: Structured table entries (legacy)
+    - dataframes: Raw DataFrames for SQLite storage (NEW)
 
-    Optimizations applied (all lossless):
+    Optimizations applied to the context-only copy (SQLite stores full data):
     - Floats rounded to 2 decimal places (standard financial precision)
     - Whole numbers converted to int (removes .00 suffix)
     - NaN values replaced with empty strings
@@ -190,6 +221,7 @@ def _parse_spreadsheet(
     """
     text_sections: list[dict] = []
     tables: list[dict] = []
+    dataframes: dict[str, pd.DataFrame] = {}
 
     try:
         if mime_type == "text/csv":
@@ -204,8 +236,12 @@ def _parse_spreadsheet(
             if df.empty:
                 continue
 
-            truncated = len(df) > _MAX_ROWS_PER_SHEET
-            df_display = df.head(_MAX_ROWS_PER_SHEET)
+            # Store full, untruncated data in SQLite (minimal header cleanup only)
+            df_sql = df.copy()
+            df_sql.columns = _sanitize_column_names(df_sql.columns)
+
+            truncated = len(df_sql) > _MAX_ROWS_PER_SHEET
+            df_display = df_sql.head(_MAX_ROWS_PER_SHEET)
 
             # Apply token-saving optimizations to the display dataframe:
             # - Round floats to 2 decimal places
@@ -249,6 +285,9 @@ def _parse_spreadsheet(
             if df_optimized.empty:
                 continue
 
+            # Store full DataFrame for SQLite (minimal header cleanup only)
+            dataframes[sheet_name] = df_sql.copy()
+
             # Build CSV table for text context (more compact than markdown)
             csv_content = f"[Sheet: {sheet_name}]\n"
             csv_content += df_optimized.to_csv(index=False)
@@ -281,7 +320,7 @@ def _parse_spreadsheet(
     except Exception as e:
         logger.error("Failed to parse spreadsheet %s: %s", name, e)
 
-    return text_sections, tables
+    return text_sections, tables, dataframes
 
 
 def _split_pdf(
@@ -431,13 +470,17 @@ async def parse_documents(
 
     all_text_sections: list[dict] = []
     all_tables: list[dict] = []
+    all_dataframes: dict[str, pd.DataFrame] = {}  # source_file:sheet_name -> DataFrame
     errors: list[dict] = []
 
     # 2a. Parse spreadsheets natively (no Document AI cost, full sheet support)
     for name, file_bytes, mime_type in spreadsheet_files:
-        text_sections, tables = _parse_spreadsheet(name, file_bytes, mime_type)
+        text_sections, tables, dataframes = _parse_spreadsheet(name, file_bytes, mime_type)
         all_text_sections.extend(text_sections)
         all_tables.extend(tables)
+        # Store dataframes with composite key (source:sheet)
+        for sheet_name, df in dataframes.items():
+            all_dataframes[f"{name}:{sheet_name}"] = df
 
     # 2b. Process remaining files via Document AI
     if docai_files:
@@ -477,6 +520,10 @@ async def parse_documents(
     full_document_context = _build_full_document_context(
         all_text_sections, all_tables
     )
+    # Build full text-only context (non-spreadsheet sources) for FULL slides
+    full_text_document_context = _build_full_text_document_context(
+        all_text_sections
+    )
     # Build shorter summary context for TEXT-only slides (cover, exec summary, outlook)
     summary_document_context = _build_summary_document_context(
         all_text_sections
@@ -501,8 +548,10 @@ async def parse_documents(
     return {
         "status": "success",
         "full_document_context": full_document_context,
+        "full_text_document_context": full_text_document_context,
         "summary_document_context": summary_document_context,
         "parsed_tables_json": json.dumps(all_tables, default=str),
+        "dataframes": all_dataframes,  # NEW: raw DataFrames for SQLite storage
         "documents_parsed": len(files) - len(errors),
         "text_sections": len(all_text_sections),
         "tables_found": len(all_tables),
@@ -578,6 +627,40 @@ def _build_summary_document_context(text_sections: list[dict]) -> str:
         parts.extend(contents[:_SUMMARY_MAX_SECTIONS_PER_SOURCE])
         if len(contents) > _SUMMARY_MAX_SECTIONS_PER_SOURCE:
             parts.append(f"\n[... {len(contents) - _SUMMARY_MAX_SECTIONS_PER_SOURCE} more sections omitted ...]")
+        parts.append("")
+
+    return "\n".join(parts)
+
+
+def _build_full_text_document_context(text_sections: list[dict]) -> str:
+    """Build a full document context excluding spreadsheet sources.
+
+    Includes all text sections from non-spreadsheet sources (PDF/DOCX/etc.)
+    without truncation. This keeps text context available for FULL slides
+    while avoiding large spreadsheet tables.
+    """
+    if not text_sections:
+        return ""
+
+    spreadsheet_extensions = (".xlsx", ".xls", ".csv")
+    filtered_sections = [
+        s for s in text_sections
+        if not s.get("source", "").lower().endswith(spreadsheet_extensions)
+    ]
+
+    if not filtered_sections:
+        return ""
+
+    parts: list[str] = ["## SOURCE DOCUMENTS (TEXT)\n"]
+
+    by_source: dict[str, list[str]] = {}
+    for section in filtered_sections:
+        src = section.get("source", "unknown")
+        by_source.setdefault(src, []).append(section.get("content", ""))
+
+    for src, contents in by_source.items():
+        parts.append(f"### {src}\n")
+        parts.extend(contents)
         parts.append("")
 
     return "\n".join(parts)
