@@ -61,6 +61,7 @@ from report_agents.prompts.slide_07_balance_sheet import PROMPT as SLIDE_07_PROM
 from report_agents.prompts.slide_08_cash_flow import PROMPT as SLIDE_08_PROMPT
 from report_agents.prompts.slide_09_key_ratios import PROMPT as SLIDE_09_PROMPT
 from report_agents.prompts.slide_10_outlook import PROMPT as SLIDE_10_PROMPT
+from report_agents.prompts.slide_11_risks_recommendations import PROMPT as SLIDE_11_PROMPT
 
 
 SLIDE_REGISTRY: list[SlideSpec] = [
@@ -143,5 +144,13 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         chart_type=ChartType.NONE,
         context_type=ContextType.SUMMARY,
         prompt=SLIDE_10_PROMPT + ACCURACY_SUFFIX,
+    ),
+    SlideSpec(
+        slide_number=11,
+        title="Key Risks & Recommendations",
+        slide_type=SlideType.TEXT,
+        chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,
+        prompt=SLIDE_11_PROMPT + ACCURACY_SUFFIX,
     ),
 ]

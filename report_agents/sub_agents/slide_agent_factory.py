@@ -11,9 +11,8 @@ from google.adk.events import Event
 from google.adk.models.google_llm import Gemini
 from google.genai import types as genai_types
 
-from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType, ContextType
+from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType
 from report_agents.tools.chart_generator import make_chart_tool
-from report_agents.tools.data_query import query_financial_data, list_available_tables
 from report_agents.tools.financial_calc import calculate_financial_metrics
 from report_agents.utils.callbacks import (
     prepare_full_context_request,
@@ -84,17 +83,13 @@ def create_slide_agents() -> list[BaseAgent]:
 
         tools = [calculate_financial_metrics]
 
-        # Add query tools for FULL context slides (TABLE/CHART/MIXED)
-        if spec.context_type == ContextType.FULL:
-            tools.extend([query_financial_data, list_available_tables])
-
         if spec.slide_type in (SlideType.CHART, SlideType.MIXED):
             chart_type_str = CHART_TYPE_MAP.get(spec.chart_type)
             if chart_type_str:
                 tools.append(make_chart_tool(chart_type_str, spec.slide_number))
 
-        # Select context callback based on context_type (not slide_type)
-        if spec.context_type == ContextType.SUMMARY:
+        # TEXT slides use summary context; data-heavy slides use full context
+        if spec.slide_type == SlideType.TEXT:
             before_callback = prepare_summary_context_request
         else:
             before_callback = prepare_full_context_request

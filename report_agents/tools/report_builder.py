@@ -113,13 +113,13 @@ async def assemble_report(
                 CONTENT_WIDTH,
                 Inches(4.5),
             )
-            render_markdown_to_textbox(
+            remaining = render_markdown_to_textbox(
                 slide, content,
                 left=CONTENT_LEFT, top=Inches(5.8),
                 width=CONTENT_WIDTH, height=Inches(1.2),
             )
         elif spec.slide_type == SlideType.MIXED and chart_bytes:
-            render_markdown_to_textbox(
+            remaining = render_markdown_to_textbox(
                 slide, content,
                 left=CONTENT_LEFT, top=CONTENT_TOP,
                 width=Inches(5.5), height=CONTENT_HEIGHT,
@@ -131,7 +131,13 @@ async def assemble_report(
                 Inches(5.8), Inches(4.0),
             )
         else:
-            render_markdown_to_textbox(slide, content)
+            remaining = render_markdown_to_textbox(slide, content)
+
+        # Create continuation slides for overflow content
+        while remaining:
+            cont_slide = prs.slides.add_slide(slide_layout)
+            add_title_bar(cont_slide, spec.title + " (cont.)")
+            remaining = render_markdown_to_textbox(cont_slide, remaining)
 
         # --- Build PDF section ---
         html_content = md_lib.markdown(
