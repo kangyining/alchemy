@@ -8,6 +8,7 @@ import os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch
 
 from google import genai
 from google.adk.tools import ToolContext
@@ -177,6 +178,77 @@ def _render_matplotlib_pie_chart(data: dict) -> bytes:
     return buf.read()
 
 
+# Max milestones per roadmap page before continuing on next page
+ROADMAP_MILESTONES_PER_PAGE = 8
+# Cell spacing: each box has headline on line 1, description on line 2 below it
+ROADMAP_CELL_STEP = 0.095
+ROADMAP_BOX_HEIGHT = 0.078
+
+
+def _render_roadmap_timeline(data: dict) -> bytes:
+    """Render one page of a vertical strategic roadmap timeline. Returns PNG bytes."""
+    return _render_roadmap_timeline_page(
+        data.get("title", "Strategic Growth Roadmap"),
+        data.get("milestones", []),
+        page_title_suffix="",
+    )
+
+
+def _render_roadmap_timeline_page(title: str, milestones: list, page_title_suffix: str = "") -> bytes:
+    """Render a single page of milestones (used for first or continuation page)."""
+    if not milestones:
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.text(0.5, 0.5, "No milestones extracted", ha="center", va="center", fontsize=14)
+        ax.axis("off")
+    else:
+        n = len(milestones)
+        fig_h = max(5, n * 0.75)
+        fig, ax = plt.subplots(figsize=(10, fig_h))
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        ax.set_facecolor("#FFFFFF")
+        fig.patch.set_facecolor("#FFFFFF")
+
+        display_title = (title + " " + page_title_suffix).strip().upper()
+        ax.text(0.5, 0.98, display_title, ha="center", va="top", fontsize=12, fontweight="bold", color="#1A3C6E")
+
+        line_x = 0.22
+        top_y, bottom_y = 0.92, 0.04
+        ax.plot([line_x, line_x], [top_y, bottom_y], color="#9a9a9a", linewidth=1.2, zorder=0)
+
+        status_color = {"past": "#393E41", "near_future": "#44BBA4", "long_term": "#F18F01"}
+        box_h = ROADMAP_BOX_HEIGHT
+        step = ROADMAP_CELL_STEP
+        for i, m in enumerate(milestones):
+            status = m.get("status", "past")
+            color = status_color.get(status, "#393E41")
+            y = top_y - i * step
+            period = m.get("period", "")
+            headline = m.get("headline", "")
+            desc = m.get("description", "")
+
+            box_x = line_x + 0.04
+            box_w = 0.72
+            box_top = y + box_h / 2
+            box_bottom = y - box_h / 2
+            # Draw box first so text sits on top
+            ax.add_patch(FancyBboxPatch((box_x, box_bottom), box_w, box_h, boxstyle="round,pad=0.004", facecolor="white", edgecolor=color, linewidth=1.2, zorder=1))
+            ax.scatter([line_x], [y], s=50, c=color, zorder=2, edgecolors="white", linewidths=1)
+            ax.text(line_x - 0.01, y, period, ha="right", va="center", fontsize=9, color=color)
+            # Headline on first line at top of box
+            ax.text(box_x + 0.01, box_top - 0.012, headline, ha="left", va="top", fontsize=9, fontweight="bold", color=color, wrap=True)
+            # Description on new line below headline, inside same box
+            ax.text(box_x + 0.01, box_top - 0.036, desc, ha="left", va="top", fontsize=8, color="#333", wrap=True)
+
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
 MPL_RENDERERS = {
     "bar": _render_matplotlib_bar_chart,
     "line": _render_matplotlib_line_chart,
@@ -260,5 +332,50 @@ def make_chart_tool(chart_type: str, slide_number: int):
 
     Returns:
         Status dict with generation method used.
+    """
+    return _tool
+
+
+def make_roadmap_tool(slide_number: int):
+    """Create a roadmap timeline tool pre-bound to a slide number. Renders vertical timeline image(s); continues on next page when many milestones."""
+
+    async def _tool(data_json: str, tool_context: ToolContext) -> dict:
+        try:
+            data = json.loads(data_json)
+        except json.JSONDecodeError as e:
+            return {"status": "error", "message": f"Invalid roadmap JSON: {e}"}
+        title = data.get("title", "Strategic Growth Roadmap")
+        milestones = data.get("milestones", [])
+        if not milestones:
+            image_bytes = _render_roadmap_timeline(data)
+            await _save_chart_artifact(tool_context, slide_number, image_bytes)
+            return {"status": "success", "chart_type": "roadmap", "pages": 1}
+        per_page = ROADMAP_MILESTONES_PER_PAGE
+        chunks = [milestones[i : i + per_page] for i in range(0, len(milestones), per_page)]
+        for p, chunk in enumerate(chunks):
+            page_suffix = f"(cont. p{p + 1})" if len(chunks) > 1 and p > 0 else ""
+            image_bytes = _render_roadmap_timeline_page(title, chunk, page_suffix)
+            if p == 0:
+                filename = f"slide_{slide_number:02d}_chart.png"
+                key = f"slide_{slide_number:02d}_chart_image"
+            else:
+                filename = f"slide_{slide_number:02d}_chart_{p + 1}.png"
+                key = f"slide_{slide_number:02d}_chart_image_{p + 1}"
+            artifact = genai_types.Part.from_bytes(data=image_bytes, mime_type="image/png")
+            await tool_context.save_artifact(filename, artifact)
+            tool_context.state[key] = filename
+        return {"status": "success", "chart_type": "roadmap", "pages": len(chunks)}
+
+    _tool.__name__ = "generate_roadmap_timeline"
+    _tool.__qualname__ = "generate_roadmap_timeline"
+    _tool.__doc__ = """Generate a strategic roadmap timeline image from structured data. If many milestones, continues on next page(s).
+
+    Args:
+        data_json: JSON string with keys: title (str), milestones (list of objects).
+                   Each milestone: period (str), headline (str), description (str),
+                   status (str: "past" | "near_future" | "long_term").
+
+    Returns:
+        Status dict.
     """
     return _tool

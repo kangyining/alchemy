@@ -14,6 +14,7 @@ class SlideType(Enum):
     TABLE = "table"
     CHART = "chart"
     MIXED = "mixed"  # text + chart on same slide
+    ROADMAP = "roadmap"  # vertical timeline image from structured milestone data
 
 
 class ChartType(Enum):
@@ -62,95 +63,107 @@ from report_agents.prompts.slide_08_cash_flow import PROMPT as SLIDE_08_PROMPT
 from report_agents.prompts.slide_09_key_ratios import PROMPT as SLIDE_09_PROMPT
 from report_agents.prompts.slide_10_outlook import PROMPT as SLIDE_10_PROMPT
 from report_agents.prompts.slide_11_risks_recommendations import PROMPT as SLIDE_11_PROMPT
+from report_agents.prompts.slide_12_roadmap_analysis import PROMPT as SLIDE_12_PROMPT
+from report_agents.prompts.slide_13_roadmap_extraction import PROMPT as SLIDE_13_PROMPT
 
 
 SLIDE_REGISTRY: list[SlideSpec] = [
-    SlideSpec(
-        slide_number=1,
-        title="Cover Page",
-        slide_type=SlideType.TEXT,
-        chart_type=ChartType.NONE,
-        context_type=ContextType.SUMMARY,
-        prompt=SLIDE_01_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=2,
-        title="Executive Summary",
-        slide_type=SlideType.TEXT,
-        chart_type=ChartType.NONE,
-        context_type=ContextType.FULL,  # Needs revenue/income figures from tables
-        prompt=SLIDE_02_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=3,
-        title="Financial Highlights",
-        slide_type=SlideType.TABLE,
-        chart_type=ChartType.NONE,
-        context_type=ContextType.FULL,
-        prompt=SLIDE_03_PROMPT + ACCURACY_SUFFIX,
-    ),
+    # SlideSpec(
+    #     slide_number=1,
+    #     title="Cover Page",
+    #     slide_type=SlideType.TEXT,
+    #     chart_type=ChartType.NONE,
+    #     context_type=ContextType.FULL,
+    #     prompt=SLIDE_01_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=2,
+    #     title="Executive Summary",
+    #     slide_type=SlideType.TEXT,
+    #     chart_type=ChartType.NONE,
+    #     context_type=ContextType.FULL,  # Needs revenue/income figures from tables
+    #     prompt=SLIDE_02_PROMPT + ACCURACY_SUFFIX,
+    # ),
+
+    # SlideSpec(
+    #     slide_number=3,
+    #     title="Financial Highlights",
+    #     slide_type=SlideType.TABLE,
+    #     chart_type=ChartType.NONE,
+    #     prompt=SLIDE_03_PROMPT + ACCURACY_SUFFIX,
+    # ),
     SlideSpec(
         slide_number=4,
         title="Revenue Breakdown",
         slide_type=SlideType.CHART,
-        chart_type=ChartType.BAR,
+        chart_type=ChartType.LINE,
         context_type=ContextType.FULL,
         prompt=SLIDE_04_PROMPT + ACCURACY_SUFFIX,
     ),
-    SlideSpec(
-        slide_number=5,
-        title="Expense Analysis",
-        slide_type=SlideType.CHART,
-        chart_type=ChartType.PIE,
-        context_type=ContextType.FULL,
-        prompt=SLIDE_05_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=6,
-        title="Profitability Trends",
-        slide_type=SlideType.CHART,
-        chart_type=ChartType.LINE,
-        context_type=ContextType.FULL,
-        prompt=SLIDE_06_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=7,
-        title="Balance Sheet Summary",
-        slide_type=SlideType.TABLE,
-        chart_type=ChartType.NONE,
-        context_type=ContextType.FULL,
-        prompt=SLIDE_07_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=8,
-        title="Cash Flow Analysis",
-        slide_type=SlideType.MIXED,
-        chart_type=ChartType.BAR,
-        context_type=ContextType.FULL,
-        prompt=SLIDE_08_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=9,
-        title="Key Financial Ratios",
-        slide_type=SlideType.TABLE,
-        chart_type=ChartType.NONE,
-        context_type=ContextType.FULL,
-        prompt=SLIDE_09_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=10,
-        title="Outlook & Recommendations",
-        slide_type=SlideType.TEXT,
-        chart_type=ChartType.NONE,
-        context_type=ContextType.SUMMARY,
-        prompt=SLIDE_10_PROMPT + ACCURACY_SUFFIX,
-    ),
-    SlideSpec(
-        slide_number=11,
-        title="Key Risks & Recommendations",
-        slide_type=SlideType.TEXT,
-        chart_type=ChartType.NONE,
-        context_type=ContextType.FULL,
-        prompt=SLIDE_11_PROMPT + ACCURACY_SUFFIX,
-    ),
+    # SlideSpec(
+    #     slide_number=5,
+    #     title="Expense Analysis",
+    #     slide_type=SlideType.CHART,
+    #     chart_type=ChartType.PIE,
+    #     prompt=SLIDE_05_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=6,
+    #     title="Profitability Trends",
+    #     slide_type=SlideType.CHART,
+    #     chart_type=ChartType.LINE,
+    #     prompt=SLIDE_06_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=7,
+    #     title="Balance Sheet Summary",
+    #     slide_type=SlideType.TABLE,
+    #     chart_type=ChartType.NONE,
+    #     prompt=SLIDE_07_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=8,
+    #     title="Cash Flow Analysis",
+    #     slide_type=SlideType.MIXED,
+    #     chart_type=ChartType.BAR,
+    #     prompt=SLIDE_08_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=9,
+    #     title="Key Financial Ratios",
+    #     slide_type=SlideType.TABLE,
+    #     chart_type=ChartType.NONE,
+    #     prompt=SLIDE_09_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=10,
+    #     title="Outlook & Recommendations",
+    #     slide_type=SlideType.TEXT,
+    #     chart_type=ChartType.NONE,
+    #     prompt=SLIDE_10_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=11,
+    #     title="Due Diligence",
+    #     slide_type=SlideType.TABLE,
+    #     chart_type=ChartType.NONE,
+    #     context_type=ContextType.FULL,
+    #     prompt=SLIDE_12_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=12,
+    #     title="Roadmap Market Analysis",
+    #     slide_type=SlideType.TABLE,
+    #     chart_type=ChartType.NONE,
+    #     context_type=ContextType.FULL,
+    #     prompt=SLIDE_12_PROMPT + ACCURACY_SUFFIX,
+    # ),
+    # SlideSpec(
+    #     slide_number=13,
+    #     title="Company Roadmap",
+    #     slide_type=SlideType.ROADMAP,
+    #     chart_type=ChartType.NONE,
+    #     context_type=ContextType.FULL,
+    #     prompt=SLIDE_13_PROMPT + ACCURACY_SUFFIX,
+    # ),
 ]

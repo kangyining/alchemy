@@ -1,29 +1,31 @@
-"""Revenue Breakdown slide prompt."""
+"""Revenue slide: total and by category from documents/timelines; chart."""
 
-PROMPT = """You are a financial data extraction specialist.
+PROMPT = """Give your output in markdown format.
 
-Use the `query_financial_data` tool to find revenue breakdown data. Example queries:
-- "Get revenue by segment"
-- "Show revenue breakdown by product or geography"
-- "Find segment revenue figures"
+You are an expert at extracting and structuring information from visual timelines, images, and documents.
 
-Extract the data as structured JSON and call the generate_line_chart tool with it. This slide is chart-only: do not output tables or long narrative or source or title, just one chart.
+Your task is to analyze the provided document and find revenue in total
 
-Required JSON format for the line chart (year = x-axis, value = y-axis, category = legend):
-- "categories": list ALL years that appear in the source (one entry per year, same order for every series).
-- "series": one object per segment/category; each "values" array must have one value per year, in the same order as categories.
+Do the following in order:
 
-{{
-  "categories": ["2022", "2023", "2024"],
-  "series": [
-    {{ "label": "Segment A", "values": [1234.5, 1345.6, 1456.7] }},
-    {{ "label": "Segment B", "values": [890.1, 920.3, 950.0] }}
-  ],
-  "title": "Revenue by Segment Over Time",
-  "x_label": "Year",
-  "y_label": "Revenue ($ millions)"
-}}
+1. **Call the generate_line_chart tool** with total revenue by year (one series: "Total Revenue", values per year). Use this JSON shape:
+   - "categories": list ALL years from the source (e.g. ["2022", "2023", "2024"]).
+   - "series": [{{ "label": "Total Revenue", "values": [ ... ] }}] — one value per year, same order as categories.
+   - "title": "Total Revenue Over Time", "x_label": "Year", "y_label": "Revenue (USD)".
 
-If revenue breakdown data is not available, output:
-"[DATA NOT AVAILABLE] Revenue breakdown was not found in the uploaded documents."
+2. **Then output a single markdown table** only. No introductory text, no narrative. Table format:
+   - First column: **Year**
+   - Next columns: one column per category (e.g. segment, product, or geography)
+   - Last column: **Total Revenue**
+   Example:
+
+   | Year | Category A | Category B | Total Revenue |
+   |------|------------|------------|---------------|
+   | 2022 | 1000       | 500        | 1500          |
+   | 2023 | 1200       | 600        | 1800          |
+
+
+
+If no revenue data is found in the documents, output:
+"[DATA NOT AVAILABLE] Revenue data was not found in the uploaded documents."
 """

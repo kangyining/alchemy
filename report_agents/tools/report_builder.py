@@ -258,6 +258,19 @@ async def assemble_report(
             chart_bytes = await load_artifact_fn(chart_filename)
 
         remaining = ""
+        # Roadmap can have continuation pages (slide_NN_chart_image_2, _3, ...)
+        roadmap_continuations = []
+        if spec.slide_type == SlideType.ROADMAP:
+            for p in range(2, 10):
+                key = f"slide_{spec.slide_number:02d}_chart_image_{p}"
+                fn = state.get(key, "")
+                if fn and load_artifact_fn:
+                    b = await load_artifact_fn(fn)
+                    if b:
+                        roadmap_continuations.append(b)
+                else:
+                    break
+
         if spec.slide_number == 1:
             date_y = Inches(0.7)
             logo_y = SLIDE_HEIGHT - Inches(0.9)
@@ -295,6 +308,20 @@ async def assemble_report(
                 slide, pptx_content,
                 left=CONTENT_LEFT, top=Inches(5.8),
                 width=CONTENT_WIDTH, height=Inches(1.2),
+            )
+        elif spec.slide_type == SlideType.ROADMAP and chart_bytes:
+            img_stream = io.BytesIO(chart_bytes)
+            slide.shapes.add_picture(
+                img_stream,
+                CONTENT_LEFT,
+                CONTENT_TOP,
+                CONTENT_WIDTH,
+                Inches(5.8),
+            )
+            remaining = render_markdown_to_textbox(
+                slide, content,
+                left=CONTENT_LEFT, top=Inches(6.2),
+                width=CONTENT_WIDTH, height=Inches(0.8),
             )
         elif spec.slide_type == SlideType.MIXED and chart_bytes:
             remaining = render_markdown_to_textbox(

@@ -12,7 +12,7 @@ from google.adk.models.google_llm import Gemini
 from google.genai import types as genai_types
 
 from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType
-from report_agents.tools.chart_generator import make_chart_tool
+from report_agents.tools.chart_generator import make_chart_tool, make_roadmap_tool
 from report_agents.tools.financial_calc import calculate_financial_metrics
 from report_agents.utils.callbacks import (
     prepare_full_context_request,
@@ -71,8 +71,8 @@ def create_slide_agents() -> list[BaseAgent]:
     """
     agents: list[BaseAgent] = []
     for spec in SLIDE_REGISTRY:
-        if spec.slide_number not in (1, 2):  # TODO: remove filter after testing
-            continue
+        # if spec.slide_number not in (4,):  # TODO: remove filter after testing
+            # continue
 
         # Insert throttle between slides (not before the first one)
         if agents:
@@ -87,6 +87,8 @@ def create_slide_agents() -> list[BaseAgent]:
             chart_type_str = CHART_TYPE_MAP.get(spec.chart_type)
             if chart_type_str:
                 tools.append(make_chart_tool(chart_type_str, spec.slide_number))
+        if spec.slide_type == SlideType.ROADMAP:
+            tools.append(make_roadmap_tool(spec.slide_number))
 
         # TEXT slides use summary context; data-heavy slides use full context
         if spec.slide_type == SlideType.TEXT:
