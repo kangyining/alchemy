@@ -51,6 +51,12 @@ export default defineConfig(({ command }) => ({
         target: backendURL,
         changeOrigin: true,
       },
+      // Report agent ADK (localhost:8000). Use in dev when both LibreChat and report-agents run locally.
+      '/report-agent-api': {
+        target: reportAgentTarget,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/report-agent-api/, ''),
+      },
     },
   },
   // Set the directory where environment variables are loaded from and restrict prefixes
