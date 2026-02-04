@@ -183,7 +183,20 @@ def _collect_inline_files(
         if part.inline_data and part.inline_data.data:
             mime = part.inline_data.mime_type or "application/octet-stream"
             ext = ext_map.get(mime, ".bin")
-            name = f"upload_{i}{ext}"
+            display_name = None
+            if getattr(part.inline_data, "display_name", None):
+                display_name = part.inline_data.display_name
+            elif getattr(part, "file_data", None) and getattr(part.file_data, "display_name", None):
+                display_name = part.file_data.display_name
+            elif getattr(part, "file_data", None) and getattr(part.file_data, "file_uri", None):
+                display_name = os.path.basename(part.file_data.file_uri)
+
+            if display_name:
+                name = os.path.basename(display_name)
+                if not os.path.splitext(name)[1]:
+                    name = f"{name}{ext}"
+            else:
+                name = f"upload_{i}{ext}"
             files.append((name, part.inline_data.data, mime))
     return files
 
