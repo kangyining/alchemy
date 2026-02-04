@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, useMemo, memo, lazy, Suspense, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import { AnimatePresence, motion } from 'framer-motion';
+import { FileBarChart } from 'lucide-react';
 import { useMediaQuery } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import type { ConversationListResponse } from 'librechat-data-provider';
@@ -229,6 +231,14 @@ const Nav = memo(
                         isSearchLoading={isSearchLoading}
                       />
                     </div>
+                    <Link
+                      to="/report"
+                      className="mt-2 flex w-full items-center gap-2 rounded-xl px-2 py-2.5 text-sm text-text-primary transition-all duration-200 ease-in-out hover:bg-surface-hover"
+                      onClick={itemToggleNav}
+                    >
+                      <FileBarChart className="h-5 w-5 flex-shrink-0 text-text-secondary" />
+                      Generate Report
+                    </Link>
                     <Suspense fallback={null}>
                       <AccountSettings />
                     </Suspense>
