@@ -72,7 +72,10 @@ def create_slide_agents() -> list[BaseAgent]:
     """
     agents: list[BaseAgent] = []
     for spec in SLIDE_REGISTRY:
-        # if spec.slide_number not in (4,):  # TODO: remove filter after testing
+        if spec.slide_number != 4:  # Single slide TODO: remove filter after testing
+            continue
+
+        # if spec.slide_number not in (1,2):  # Multi slides TODO: remove filter after testing
             # continue
 
         # Insert throttle between slides (not before the first one)
