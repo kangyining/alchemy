@@ -20,6 +20,7 @@ from report_agents.utils.callbacks import (
     log_token_usage,
     handle_model_error,
 )
+from report_agents.utils.gemini_models import GEMINI_MODEL
 from report_agents.utils.state_keys import slide_content_key
 
 # Map ChartType enum to the chart_type string expected by make_chart_tool
@@ -30,7 +31,7 @@ CHART_TYPE_MAP = {
 }
 
 MODEL = Gemini(
-    model="gemini-2.5-flash",
+    model=GEMINI_MODEL,
     retry_options=genai_types.HttpRetryOptions(
         initial_delay=60, max_delay=60, attempts=3,
     ),

@@ -14,6 +14,8 @@ from google import genai
 from google.adk.tools import ToolContext
 from google.genai import types as genai_types
 
+from report_agents.utils.gemini_models import GEMINI_MODEL, GEMINI_IMAGE_MODEL
+
 logger = logging.getLogger(__name__)
 
 CHART_STYLE_PROMPT = """Professional financial report chart. Clean, modern design.
@@ -69,7 +71,7 @@ def _validate_chart_numbers(client, image_bytes: bytes, source_data: dict) -> bo
     """Ask Gemini to read the chart image and verify numbers match source data."""
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=[
                 genai_types.Part.from_data(data=image_bytes, mime_type="image/png"),
                 (
@@ -282,7 +284,7 @@ Categories and exact values (render these numbers precisely on the chart):
 {values_desc}
 """
         response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
+            model=GEMINI_IMAGE_MODEL,
             contents=prompt,
             config=genai_types.GenerateContentConfig(response_modalities=["Image"]),
         )

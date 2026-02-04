@@ -13,11 +13,9 @@ from google import genai
 from google.adk.tools import ToolContext
 
 from report_agents.services.database_service import FinancialDataStore
+from report_agents.utils.gemini_models import GEMINI_MODEL
 
 logger = logging.getLogger(__name__)
-
-# Model for NL-to-SQL translation (fast, cheap)
-NL_TO_SQL_MODEL = "gemini-2.5-flash"
 
 # System prompt for SQL generation
 SQL_GENERATION_PROMPT = """You are a SQL query generator for financial data stored in SQLite.
@@ -56,7 +54,7 @@ async def _generate_sql(schema: str, question: str) -> str:
     prompt = SQL_GENERATION_PROMPT.format(schema=schema, question=question)
 
     response = await client.aio.models.generate_content(
-        model=NL_TO_SQL_MODEL,
+        model=GEMINI_MODEL,
         contents=prompt,
     )
 
