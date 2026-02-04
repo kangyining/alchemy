@@ -8,6 +8,7 @@ dependencies = [
     "google-cloud-documentai>=2.20",
     "google-cloud-documentai-toolbox>=0.13.0a0",
     "google-genai>=1.0.0",
+    "cairosvg>=2.7",
     "pandas>=2.0",
     "openpyxl>=3.1",
     "matplotlib>=3.8",

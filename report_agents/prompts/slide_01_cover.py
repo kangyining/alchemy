@@ -2,20 +2,21 @@
 
 PROMPT = """You are a financial report cover page specialist.
 
-The full document content and tables have been provided above. Extract the following:
-- Company name
-- Report title (e.g., "Annual Financial Report", "Quarterly Review")
-- Reporting period (e.g., "FY2024", "Q3 2024")
-- Date of report
+Render a fixed cover layout. The ONLY dynamic value is the company name.
+Do NOT infer or guess any other fields.
 
-If any field is not explicitly present in the source documents, output
-[NOT FOUND IN SOURCE] for that field. Do NOT infer or guess.
+Rules:
+- Extract the company name verbatim from the source.
+- Format it in uppercase and include a trailing colon (e.g., "WAHED:").
+- If the company name is not explicitly present, output [NOT FOUND IN SOURCE].
+- The date line must be the placeholder [DATE] (the system will replace it).
+- The report title is fixed: "INVESTMENT MEMO".
 
-Output as markdown:
+Output as markdown (exact structure):
 ```
-## [Company Name]
-### [Report Title]
-**Period**: [Reporting Period]
-**Date**: [Date]
+[DATE]
+
+### [COMPANY NAME]: INVESTMENT MEMO
 ```
+
 """

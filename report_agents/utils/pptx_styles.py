@@ -7,9 +7,9 @@ from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
 # Brand colors
-PRIMARY_COLOR = RGBColor(0x1A, 0x3C, 0x6E)  # Dark navy
-ACCENT_COLOR = RGBColor(0x2E, 0x86, 0xAB)  # Blue
-TEXT_COLOR = RGBColor(0x33, 0x33, 0x33)  # Near-black
+PRIMARY_COLOR = RGBColor(0x5B, 0x5B, 0x5B)  # Dark gray
+ACCENT_COLOR = RGBColor(0xA8, 0x99, 0x68)  # Gold
+TEXT_COLOR = RGBColor(0x11, 0x11, 0x11)  # Near-black
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 LIGHT_GRAY = RGBColor(0xF2, 0xF2, 0xF2)
 
@@ -45,6 +45,7 @@ def add_title_bar(slide, title_text: str):
     tf.paragraphs[0].font.size = Pt(24)
     tf.paragraphs[0].font.color.rgb = WHITE
     tf.paragraphs[0].font.bold = True
+    tf.paragraphs[0].font.name = "Arial"
     tf.paragraphs[0].alignment = PP_ALIGN.LEFT
     tf.margin_left = Inches(0.5)
     tf.margin_top = Inches(0.25)
@@ -97,6 +98,7 @@ def _add_table_shape(slide, headers: list[str], rows: list[list[str]],
         p.font.size = Pt(9)
         p.font.bold = True
         p.font.color.rgb = WHITE
+        p.font.name = "Arial"
         p.alignment = PP_ALIGN.CENTER
 
     # Style body rows
@@ -113,6 +115,7 @@ def _add_table_shape(slide, headers: list[str], rows: list[list[str]],
             p = cell.text_frame.paragraphs[0]
             p.font.size = Pt(8)
             p.font.color.rgb = TEXT_COLOR
+            p.font.name = "Arial"
             # Right-align numeric-looking cells, left-align first column
             if col_idx == 0:
                 p.alignment = PP_ALIGN.LEFT
@@ -172,37 +175,28 @@ def _render_text_lines(tf, lines: list[str], is_first_block: bool):
             p.font.size = Pt(14)
             p.font.bold = True
             p.font.color.rgb = PRIMARY_COLOR
-            p.space_after = Pt(6)
-        elif stripped.startswith("# "):
-            p.text = _clean_markdown_text(stripped[2:])
+            p.space_after = Pt(8)
+        elif stripped.startswith("### "):
+            p.text = stripped[4:]
             p.font.size = Pt(16)
             p.font.bold = True
-            p.font.color.rgb = PRIMARY_COLOR
+            p.font.color.rgb = ACCENT_COLOR
             p.space_after = Pt(6)
         # Handle bullet points (-, *, +, or numbered 1. 2.)
         elif re.match(r'^[-*+]\s', stripped):
             p.text = "  \u2022 " + _clean_markdown_text(stripped[2:])
             p.font.size = Pt(10)
             p.font.color.rgb = TEXT_COLOR
-        elif re.match(r'^\d+\.\s', stripped):
-            # Numbered list - keep the number
-            p.text = "  " + _clean_markdown_text(stripped)
-            p.font.size = Pt(10)
+        elif stripped.startswith("**") and stripped.endswith("**"):
+            p.text = stripped[2:-2]
+            p.font.size = Pt(14)
+            p.font.bold = True
             p.font.color.rgb = TEXT_COLOR
-        # Handle blockquotes
-        elif stripped.startswith("> "):
-            p.text = _clean_markdown_text(stripped[2:])
-            p.font.size = Pt(10)
-            p.font.italic = True
-            p.font.color.rgb = ACCENT_COLOR
-        # Handle horizontal rules
-        elif re.match(r'^[-*_]{3,}$', stripped):
-            p.text = ""
-            p.space_after = Pt(4)
         else:
             p.text = _clean_markdown_text(stripped)
             p.font.size = Pt(10)
             p.font.color.rgb = TEXT_COLOR
+            p.font.name = "Arial"
 
 
 def _strip_code_fences(md_text: str) -> str:

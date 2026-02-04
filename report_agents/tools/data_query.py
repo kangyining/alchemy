@@ -17,7 +17,7 @@ from report_agents.services.database_service import FinancialDataStore
 logger = logging.getLogger(__name__)
 
 # Model for NL-to-SQL translation (fast, cheap)
-NL_TO_SQL_MODEL = "gemini-3-flash-preview"
+NL_TO_SQL_MODEL = "gemini-2.5-flash"
 
 # System prompt for SQL generation
 SQL_GENERATION_PROMPT = """You are a SQL query generator for financial data stored in SQLite.
