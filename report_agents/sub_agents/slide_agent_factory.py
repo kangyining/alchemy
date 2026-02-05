@@ -13,6 +13,7 @@ from google.genai import types as genai_types
 
 from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType
 from report_agents.tools.chart_generator import make_chart_tool, make_roadmap_tool
+from report_agents.tools.data_query import query_financial_data
 from report_agents.tools.financial_calc import calculate_financial_metrics
 from report_agents.utils.callbacks import (
     prepare_full_context_request,
@@ -71,12 +72,10 @@ def create_slide_agents() -> list[BaseAgent]:
     Each agent writes to a unique output_key in session state.
     """
     agents: list[BaseAgent] = []
+    allowed_slides = (1, 2, 4, 11, 12, 13)
     for spec in SLIDE_REGISTRY:
-        if spec.slide_number != 4:  # Single slide TODO: remove filter after testing
+        if spec.slide_number not in allowed_slides:
             continue
-
-        # if spec.slide_number not in (1,2):  # Multi slides TODO: remove filter after testing
-            # continue
 
         # Insert throttle between slides (not before the first one)
         if agents:
@@ -86,6 +85,8 @@ def create_slide_agents() -> list[BaseAgent]:
             ))
 
         tools = [calculate_financial_metrics]
+        if spec.slide_type in (SlideType.TABLE, SlideType.CHART, SlideType.MIXED):
+            tools.append(query_financial_data)
 
         if spec.slide_type in (SlideType.CHART, SlideType.MIXED):
             chart_type_str = CHART_TYPE_MAP.get(spec.chart_type)

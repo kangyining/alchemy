@@ -141,6 +141,55 @@ class FinancialDataStore:
                 logger.error("SQL execution error: %s | Query: %s", e, sql)
                 raise
 
+    def get_all_table_names(self) -> list[str]:
+        """Return all table names in the SQLite database (from sqlite_master)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def print_tables(self) -> None:
+        """Log all table names to the screen (logger.info)."""
+        names = self.get_all_table_names()
+        if not names:
+            logger.info("Database has no tables.")
+            return
+        logger.info("Tables in SQLite: %s", ", ".join(names))
+
+    def get_all_table_contents(self, limit_per_table: int = 100) -> dict[str, list[dict]]:
+        """Return contents of every table as dict[table_name -> list of row dicts].
+
+        Args:
+            limit_per_table: Max rows to fetch per table (default 100).
+        """
+        names = self.get_all_table_names()
+        out = {}
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            for name in names:
+                cursor = conn.execute(
+                    f'SELECT * FROM "{name}" LIMIT {limit_per_table}'
+                )
+                out[name] = [dict(row) for row in cursor.fetchall()]
+        return out
+
+    def print_all_table_contents(self, limit_per_table: int = 50) -> None:
+        """Log table names and their contents (first N rows) to the screen."""
+        contents = self.get_all_table_contents(limit_per_table=limit_per_table)
+        if not contents:
+            logger.info("Database has no tables.")
+            return
+        for name, rows in contents.items():
+            logger.info("--- Table: %s (%d rows) ---", name, len(rows))
+            if not rows:
+                continue
+            keys = list(rows[0].keys())
+            logger.info("Columns: %s", keys)
+            for i, row in enumerate(rows):
+                logger.info("  Row %d: %s", i + 1, row)
+        logger.info("--- End table contents ---")
+
     def get_table_list(self) -> list[dict]:
         """Get list of all stored tables with metadata.
 

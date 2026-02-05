@@ -1,10 +1,10 @@
-"""Revenue slide: total and by category from documents/timelines; chart."""
+"""Revenue slide: total and by category; prefer SQLite, then document text."""
 
 PROMPT = """Give your output in markdown format.
 
-You are an expert at extracting and structuring information from visual timelines, images, and documents.
+Financial data is available in two ways: (1) the `query_financial_data` tool (SQLite from uploaded Excel/CSV) and (2) the document text above (from PDFs). Prefer the database: use `query_financial_data` first to get revenue by year and by category. Example: query_financial_data("Get total revenue by year") or query_financial_data("Get revenue by segment and year"). Only use the document text if the query returns no data.
 
-Your task is to analyze the provided document and find revenue in total
+Your task: find revenue in total and by category (if available).
 
 Do the following in order:
 

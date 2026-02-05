@@ -65,6 +65,7 @@ from report_agents.prompts.slide_10_outlook import PROMPT as SLIDE_10_PROMPT
 from report_agents.prompts.slide_11_risks_recommendations import PROMPT as SLIDE_11_PROMPT
 from report_agents.prompts.slide_12_roadmap_analysis import PROMPT as SLIDE_12_PROMPT
 from report_agents.prompts.slide_13_roadmap_extraction import PROMPT as SLIDE_13_PROMPT
+from report_agents.prompts.slide_14_recommendations_approvals import PROMPT as SLIDE_14_PROMPT
 
 
 SLIDE_REGISTRY: list[SlideSpec] = [
@@ -150,7 +151,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
     ),
     SlideSpec(
         slide_number=11,
-        title="Risks & Recommendations",
+        title="Key Risks & Mitigants",
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
@@ -172,4 +173,12 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         context_type=ContextType.FULL,
         prompt=SLIDE_13_PROMPT + ACCURACY_SUFFIX,
     ),
+    # SlideSpec(
+    #     slide_number=14,
+    #     title="Recommendations & Approvals",
+    #     slide_type=SlideType.TABLE,
+    #     chart_type=ChartType.NONE,
+    #     context_type=ContextType.FULL,
+    #     prompt=SLIDE_14_PROMPT,
+    # ),
 ]

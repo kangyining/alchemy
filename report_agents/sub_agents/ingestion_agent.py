@@ -101,6 +101,8 @@ class IngestionAgent(BaseAgent):
                 len(dataframes),
                 len(table_schemas),
             )
+            # store.print_tables()
+            # store.print_all_table_contents(limit_per_table=100)
 
         # 4. Emit state delta so downstream agents can read parsed data
         state_delta = {

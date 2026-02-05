@@ -11,6 +11,7 @@ import markdown as md_lib
 from jinja2 import Template
 from pptx import Presentation
 from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
 from weasyprint import HTML
 
 from google.genai import types as genai_types
@@ -19,14 +20,22 @@ from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType
 from report_agents.utils.pptx_styles import (
     SLIDE_WIDTH,
     SLIDE_HEIGHT,
+    TITLE_BAR_HEIGHT,
     CONTENT_LEFT,
     CONTENT_TOP,
     CONTENT_WIDTH,
     CONTENT_HEIGHT,
+    PRIMARY_COLOR,
     ACCENT_COLOR,
     TEXT_COLOR,
+    WHITE,
     add_title_bar,
     render_markdown_to_textbox,
+    _split_markdown_blocks,
+    _blocks_to_markdown,
+    _parse_md_table,
+    _add_table_shape,
+    _clean_markdown_text,
 )
 from report_agents.utils.state_keys import slide_content_key, slide_chart_image_key
 
@@ -248,6 +257,8 @@ async def assemble_report(
         # --- Build PPTX slide ---
         slide_layout = prs.slide_layouts[6]  # Blank layout
         slide = prs.slides.add_slide(slide_layout)
+        if spec.slide_number != 1:
+            add_title_bar(slide, spec.title)
 
         # Load chart image if this slide has one
         chart_filename = state.get(
@@ -335,6 +346,57 @@ async def assemble_report(
                 Inches(6.75), CONTENT_TOP,
                 Inches(5.8), Inches(4.0),
             )
+        elif spec.slide_number == 14:
+            # Surgical side-by-side layout only for Slide 14 Recommendations
+            blocks = _split_markdown_blocks(pptx_content)
+            txt_lines, tbl_blk = [], None
+            for bt, bl in blocks:
+                if "## Investment Criteria Assessment" in "\n".join(bl): continue
+                if bt == "table": tbl_blk = (bt, bl)
+                else: txt_lines.extend(bl)
+            
+            if txt_lines:
+                # Use a single large textbox to ensure nothing is truncated by split logic
+                txBox = slide.shapes.add_textbox(CONTENT_LEFT, TITLE_BAR_HEIGHT + Inches(0.1), Inches(6.2), Inches(6.3))
+                tf = txBox.text_frame; tf.word_wrap = True
+                from report_agents.utils.pptx_styles import _render_text_lines
+                _render_text_lines(tf, txt_lines, is_first_block=True)
+                
+                # Aggressive font and spacing shrinkage for Slide 14 (strictly target only this box)
+                for p in tf.paragraphs:
+                    p.space_after = Pt(0)
+                    p.space_before = Pt(0)
+                    p.line_spacing = 0.8 # Tighten further
+                    for run in p.runs:
+                        if run.font.size:
+                            # Headers (usually Pt 14) -> Pt 9, Body (usually Pt 10) -> Pt 6.5
+                            run.font.size = Pt(run.font.size.pt * 0.65)
+                        else:
+                            run.font.size = Pt(6.5)
+            if tbl_blk:
+                h, r = _parse_md_table(tbl_blk[1])
+                # Locally implement dense table for Slide 14 to prevent overflow
+                num_rows = 1 + len(r); num_cols = len(h)
+                # Position table below title bar, matching left column
+                t_left = CONTENT_LEFT + Inches(6.5); t_top = TITLE_BAR_HEIGHT + Inches(0.4); t_width = Inches(6.0)
+                # Tighter row height
+                t_height = Inches(0.24) * num_rows
+                t_shape = slide.shapes.add_table(num_rows, num_cols, t_left, t_top, t_width, t_height)
+                t = t_shape.table
+                from pptx.enum.text import PP_ALIGN
+                for c_idx, h_txt in enumerate(h):
+                    cell = t.cell(0, c_idx); cell.text = _clean_markdown_text(h_txt); cell.fill.solid(); cell.fill.fore_color.rgb = PRIMARY_COLOR
+                    p = cell.text_frame.paragraphs[0]; p.font.size = Pt(8); p.font.bold = True; p.font.color.rgb = WHITE; p.alignment = PP_ALIGN.CENTER
+                for r_idx, r_cells in enumerate(r):
+                    for c_idx, c_txt in enumerate(r_cells):
+                        cell = t.cell(r_idx+1, c_idx); cell.text = _clean_markdown_text(c_txt)
+                        if r_idx % 2 == 1: cell.fill.solid(); cell.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
+                        p = cell.text_frame.paragraphs[0]; p.font.size = Pt(6.5); p.font.color.rgb = TEXT_COLOR; p.alignment = PP_ALIGN.LEFT
+                
+                tx = slide.shapes.add_textbox(CONTENT_LEFT+Inches(6.5), TITLE_BAR_HEIGHT + Inches(0.1), Inches(4.0), Inches(0.3))
+                p = tx.text_frame.paragraphs[0]; p.text = "Investment Criteria Assessment"
+                p.font.size = Pt(12); p.font.bold = True; p.font.color.rgb = ACCENT_COLOR
+            remaining = ""
         else:
             remaining = render_markdown_to_textbox(slide, pptx_content)
 
@@ -356,6 +418,16 @@ async def assemble_report(
             )
             logo_shape.left = int(SLIDE_WIDTH - logo_shape.width - logo_margin)
             logo_shape.top = int(SLIDE_HEIGHT - logo_shape.height - logo_margin)
+
+        # FINAL TITLE FIX: Ensure title bar on all content slides is Pt 24 White
+        if spec.slide_number != 1:
+            for s in slide.shapes:
+                # Identification: wide rectangle at the very top
+                if s.top < Inches(0.1) and s.width > Inches(10) and hasattr(s, "text_frame"):
+                    for p in s.text_frame.paragraphs:
+                        p.font.size = Pt(24)
+                        p.font.color.rgb = WHITE
+                        p.font.bold = True
 
         # Create continuation slides for overflow content
         while remaining:
