@@ -64,7 +64,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 <html>
 <head>
 <style>
-  @page { size: landscape; margin: 0.75in; }
+  @page { size: landscape; margin: 0; }
   :root {
     --ink: #111111;
     --muted: #7a7a7a;
@@ -73,65 +73,82 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     --light: #f2f2f2;
     --grid: #e5e5e5;
   }
-  body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); line-height: 1.4; }
-  .slide { page-break-after: always; padding: 0; position: relative; }
-  .slide:last-child { page-break-after: avoid; }
-  .content { font-size: 12pt; }
-  p { margin: 0 0 10px 0; }
-  ul { margin: 0 0 12px 18px; }
-  li { margin: 4px 0; }
-  blockquote {
-    margin: 10px 0; padding: 8px 12px; background: var(--light);
-    border-left: 4px solid var(--bar);
+  body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); line-height: 1.3; margin: 0; padding: 0; }
+  .slide { 
+    page-break-after: always; 
+    width: 13.33in; /* Matching SLIDE_WIDTH */
+    height: 7.5in;   /* Matching SLIDE_HEIGHT */
+    position: relative; 
+    overflow: hidden;
   }
-  table { border-collapse: collapse; width: 100%; margin: 10px 0 14px 0; }
-  th, td { border: 1px solid var(--grid); padding: 8px 10px; font-size: 10.5pt; }
-  th { background: var(--bar); color: #ffffff; text-align: center; }
-  td { text-align: right; }
-  td:first-child, th:first-child { text-align: left; }
-  tr:nth-child(even) { background: #fafafa; }
-  img { max-width: 92%; height: auto; display: block; margin: 10px auto; }
-  h2 { font-size: 22pt; font-weight: 800; margin: 6px 0 8px 0; }
-  h3 {
-    font-size: 13.5pt; font-weight: 700; color: #ffffff;
-    background: var(--bar); padding: 6px 10px; margin: 12px 0 8px 0;
+  .slide:last-child { page-break-after: avoid; }
+  
+  .title-bar {
+    background-color: var(--bar);
+    color: white;
+    height: 0.6in;
+    display: flex;
+    align-items: center;
+    padding: 0 0.5in;
+    font-size: 24pt;
+    font-weight: bold;
+    text-transform: capitalize;
   }
 
+  .content-area {
+    padding: 0.25in 0.5in;
+    height: 6.9in;
+    box-sizing: border-box;
+  }
+
+  .content { font-size: 11pt; }
+  p { margin: 0 0 8px 0; }
+  ul { margin: 0 0 10px 18px; }
+  li { margin: 2px 0; }
+  
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+  th, td { border: 1px solid var(--grid); padding: 6px 8px; font-size: 9.5pt; }
+  th { background: var(--bar); color: #ffffff; text-align: center; }
+  td { text-align: left; }
+  tr:nth-child(even) { background: #f9f9f9; }
+
+  /* Slide 14 specific side-by-side */
+  .slide-14-grid {
+    display: flex;
+    gap: 0.4in;
+    height: 100%;
+  }
+  .left-col { width: 55%; font-size: 8.5pt; }
+  .right-col { width: 45%; }
+  .right-col table { font-size: 7pt; }
+  .right-col h4 { margin: 0 0 5px 0; color: var(--accent); font-size: 12pt; }
+
   /* Cover layout */
-  .cover .content { padding: 0; }
+  .cover { background: white; padding: 0.75in; box-sizing: border-box; }
   .cover-stack {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 6.5in;
+    height: 6in;
   }
-  .cover-date {
-    color: var(--ink); font-size: 12pt; letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .cover-title {
-    color: var(--accent); font-size: 21pt; font-weight: 500;
-    letter-spacing: 0.04em;
-  }
-  .cover-branding { }
-  .cover-branding svg { height: 50px; width: auto; display: block; }
+  .cover-date { font-size: 14pt; letter-spacing: 0.08em; text-transform: uppercase; }
+  .cover-title { color: var(--accent); font-size: 24pt; font-weight: bold; margin: 2in 0; }
+  .cover-branding svg { height: 60px; }
   .cover-infinity-logo {
     position: absolute;
-    right: 0;
-    bottom: 0;
-    height: 70px;
-    width: auto;
-    display: block;
-    max-width: none;
-    margin: 0;
+    right: 0.5in;
+    bottom: 0.5in;
+    height: 100px;
   }
+
+  /* Utility to remove h2 from inner markdown if it's already in title bar */
+  .inner-content h2 { display: none; }
 </style>
 </head>
 <body>
 {% for section in sections %}
 <div class="slide{% if section.is_cover %} cover{% endif %}">
-  <div class="content">
-    {% if section.is_cover %}
+  {% if section.is_cover %}
     <div class="cover-stack">
       <div class="cover-date">{{ section.cover_date }}</div>
       <div class="cover-title">{{ section.cover_title }}</div>
@@ -140,16 +157,28 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
       {% endif %}
     </div>
     {% if section.infinity_logo_png %}
-    <img class="cover-infinity-logo"
-         src="data:image/png;base64,{{ section.infinity_logo_png }}"
-         alt="Infinity logo"/>
+    <img class="cover-infinity-logo" src="data:image/png;base64,{{ section.infinity_logo_png }}" />
     {% endif %}
-    {% else %}
-    {{ section.html_content }}
-    {% endif %}
-  </div>
-  {% if section.chart_img %}
-  <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart"/>
+  {% else %}
+    <div class="title-bar">{{ section.title }}</div>
+    <div class="content-area">
+      {% if section.is_slide_14 %}
+        <div class="slide-14-grid">
+          <div class="left-col inner-content">{{ section.slide_14_left_html }}</div>
+          <div class="right-col">
+            <h4>Investment Criteria Assessment</h4>
+            {{ section.slide_14_right_html }}
+          </div>
+        </div>
+      {% else %}
+        <div class="inner-content">
+          {{ section.html_content }}
+          {% if section.chart_img %}
+          <img src="data:image/png;base64,{{ section.chart_img }}" style="max-height: 4in;" />
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
   {% endif %}
 </div>
 {% endfor %}
@@ -436,10 +465,32 @@ async def assemble_report(
             remaining = render_markdown_to_textbox(cont_slide, remaining)
 
         # --- Build PDF section ---
-        html_content = md_lib.markdown(
-            content,
-            extensions=["tables", "fenced_code"],
-        )
+        is_slide_14 = (spec.slide_number == 14)
+        slide_14_left_html = ""
+        slide_14_right_html = ""
+        
+        if is_slide_14:
+            blocks = _split_markdown_blocks(content)
+            left_md_lines = []
+            right_md_lines = []
+            for bt, bl in blocks:
+                if bt == "table":
+                    right_md_lines.extend(bl)
+                else:
+                    # Skip the Assessment header if it exists in text to match PPTX sidebar title
+                    if any("## Investment Criteria Assessment" in line for line in bl):
+                        continue
+                    left_md_lines.extend(bl)
+            
+            slide_14_left_html = md_lib.markdown("\n".join(left_md_lines), extensions=["tables", "fenced_code"])
+            slide_14_right_html = md_lib.markdown("\n".join(right_md_lines), extensions=["tables", "fenced_code"])
+            html_content = "" # Not used for slide 14
+        else:
+            html_content = md_lib.markdown(
+                content,
+                extensions=["tables", "fenced_code"],
+            )
+
         chart_img_b64 = None
         if chart_bytes:
             chart_img_b64 = base64.b64encode(chart_bytes).decode("utf-8")
@@ -454,6 +505,9 @@ async def assemble_report(
             "html_content": html_content,
             "chart_img": chart_img_b64,
             "is_cover": spec.slide_number == 1,
+            "is_slide_14": is_slide_14,
+            "slide_14_left_html": slide_14_left_html,
+            "slide_14_right_html": slide_14_right_html,
             "cover_logo_svg": INFINITY_TEXT_LOGO_SVG if spec.slide_number == 1 else "",
             "infinity_logo_png": INFINITY_LOGO_PNG_B64 if spec.slide_number == 1 else "",
             "cover_date": cover_date,
