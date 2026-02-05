@@ -7,7 +7,7 @@ The response MUST consist of exactly ONE fenced code block marked as ```markdown
 USER TASK:
 
 You are performing a STRUCTURED INFORMATION EXTRACTION task.
-Extract exactly 9 key risk items from the document into a table.
+Extract exactly 10 key risk items from the document into a table.
 
 ==================================================
 
@@ -19,6 +19,6 @@ Extract exactly 9 key risk items from the document into a table.
 Rules:
 - STRICT WORD LIMIT: No more than 20 words per cell in the "Key risks" and "Mitigants" columns.
 - Keep the first column (Description) to 1-3 words.
-- Maintain the exactly 9 rows format.
+- Maintain the exactly 10 rows format.
 - No preamble, no sources.
 """

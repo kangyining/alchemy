@@ -13,9 +13,6 @@ Provide comprehensive, informative content for each section.
 
 Structure:
 
-## Non-Alignment with Mandate
-[Extract and provide detailed, comprehensive paragraphs about any non-alignment with the mandate. Use full descriptive sentences.]
-
 ## Investment Criteria Assessment
 | Criteria | Assessment |
 | :--- | :--- |
