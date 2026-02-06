@@ -3,11 +3,11 @@
 This is the entry point that ADK discovers via `adk web`.
 It wires together the three-phase pipeline:
   1. Ingestion — parse uploaded documents with Document AI (deterministic)
-  2. Sequential slide generation — slide agents run one at a time to avoid rate limits
+  2. Parallel slide generation — slide agents run concurrently for speed
   3. Assembly — build PPTX + PDF from all slide outputs (deterministic)
 """
 
-from google.adk.agents import SequentialAgent
+from google.adk.agents import SequentialAgent, ParallelAgent
 from google.adk.apps.app import App
 from google.adk.agents.context_cache_config import ContextCacheConfig
 
@@ -18,20 +18,20 @@ from report_agents.sub_agents.assembly_agent import assembly_agent
 # Create all slide agents from the registry
 slide_agents = create_slide_agents()
 
-# Wrap slide agents in SequentialAgent to avoid rate limits.
-# Each agent receives full document context via the before_model_callback.
-sequential_slide_generation = SequentialAgent(
-    name="SequentialSlideGeneration",
+# Use ParallelAgent to run all slide agents concurrently.
+# This significantly reduces latency compared to SequentialAgent.
+# Each agent receives relevant document context via its before_model_callback.
+parallel_slide_generation = ParallelAgent(
+    name="ParallelSlideGeneration",
     sub_agents=slide_agents,
 )
 
-# Root orchestrator — no before_agent_callback needed since the
-# IngestionAgent (BaseAgent) sets state deterministically.
+# Root orchestrator — Phase 1 must complete before Phase 2, and Phase 2 before Phase 3.
 root_agent = SequentialAgent(
     name="FinancialReportOrchestrator",
     sub_agents=[
         ingestion_agent,                # Phase 1: Parse documents (deterministic)
-        sequential_slide_generation,    # Phase 2: Generate slides sequentially
+        parallel_slide_generation,       # Phase 2: Generate slides in parallel
         assembly_agent,                 # Phase 3: Build PPTX + PDF (deterministic)
     ],
 )

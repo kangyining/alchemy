@@ -1,13 +1,9 @@
 """Factory that creates one LlmAgent per slide from the prompt registry."""
 
-import asyncio
 import re
-from collections.abc import AsyncGenerator
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.base_agent import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
-from google.adk.events import Event
 from google.adk.models.google_llm import Gemini
 from google.genai import types as genai_types
 
@@ -38,29 +34,6 @@ MODEL = Gemini(
     ),
 )
 
-# Seconds to pause between slide agents to spread token usage across TPM windows
-INTER_SLIDE_DELAY_SECONDS = 10
-
-
-class ThrottleAgent(BaseAgent):
-    """Deterministic agent that sleeps to spread TPM usage across minute windows."""
-
-    delay_seconds: float = INTER_SLIDE_DELAY_SECONDS
-
-    async def _run_async_impl(
-        self, ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
-        await asyncio.sleep(self.delay_seconds)
-        yield Event(
-            author=self.name,
-            content=genai_types.Content(
-                role="model",
-                parts=[genai_types.Part.from_text(
-                    text=f"Throttle: waited {self.delay_seconds}s before next slide."
-                )],
-            ),
-        )
-
 
 def create_slide_agents() -> list[BaseAgent]:
     """Create one LlmAgent per slide from the registry.
@@ -72,18 +45,7 @@ def create_slide_agents() -> list[BaseAgent]:
     Each agent writes to a unique output_key in session state.
     """
     agents: list[BaseAgent] = []
-    allowed_slides = (1, 2, 4, 11, 12, 13, 14)
     for spec in SLIDE_REGISTRY:
-        if spec.slide_number not in allowed_slides:
-            continue
-
-        # Insert throttle between slides (not before the first one)
-        if agents:
-            agents.append(ThrottleAgent(
-                name=f"Throttle_before_{spec.slide_number:02d}",
-                delay_seconds=INTER_SLIDE_DELAY_SECONDS,
-            ))
-
         tools = [calculate_financial_metrics]
         if spec.slide_type in (SlideType.TABLE, SlideType.CHART, SlideType.MIXED):
             tools.append(query_financial_data)
