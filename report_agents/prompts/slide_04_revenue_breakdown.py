@@ -1,31 +1,25 @@
-"""Revenue slide: total and by category; prefer SQLite, then document text."""
+"""Revenue slide: chart only; prefer SQLite, then document text."""
 
-PROMPT = """Give your output in markdown format.
+PROMPT = """Financial data comes from (1) the `query_financial_data` tool (SQL from uploaded Excel/CSV) and (2) the document text above. 
 
-Financial data is available in two ways: (1) the `query_financial_data` tool (SQLite from uploaded Excel/CSV) and (2) the document text above (from PDFs). Prefer the database: use `query_financial_data` first to get revenue by year and by category. Example: query_financial_data("Get total revenue by year") or query_financial_data("Get revenue by segment and year"). Only use the document text if the query returns no data.
+**Always prioritize SQL**: call `query_financial_data` first (e.g. "Get total revenue and number of users by year"). If the query returns data, use that data for the chart — do not use document text when SQL has the figures. Only use the document text when the query returns no rows or no relevant columns.
 
-Your task: find revenue in total and by category (if available).
+Your task: produce only the chart. Do not output any table, source text, or narrative.
 
-Do the following in order:
+Call the `generate_line_chart` tool with:
+   - "categories": list of years from the source (e.g. ["2022", "2023", "2024"]).
+   - "series": [
+       {{ "label": "Total Revenue", "values": [ ... ] }},
+       {{ "label": "Number of Users", "values": [ ... ] }}
+     ]
+     Each `values` list must have one value per year, in the same order as `categories`.
+   - "title": "Revenue and Users Over Time",
+   - "x_label": "Year",
+   - "y_left_label": "Revenue (USD)",
+   - "y_right_label": "Number of Users".
 
-1. **Call the generate_line_chart tool** with total revenue by year (one series: "Total Revenue", values per year). Use this JSON shape:
-   - "categories": list ALL years from the source (e.g. ["2022", "2023", "2024"]).
-   - "series": [{{ "label": "Total Revenue", "values": [ ... ] }}] — one value per year, same order as categories.
-   - "title": "Total Revenue Over Time", "x_label": "Year", "y_label": "Revenue (USD)".
+If user data by year is not available, call `generate_line_chart` with just the "Total Revenue" series (single series, no y_right_label).
 
-2. **Then output a single markdown table** only. No introductory text, no narrative. Table format:
-   - First column: **Year**
-   - Next columns: one column per category (e.g. segment, product, or geography)
-   - Last column: **Total Revenue**
-   Example:
-
-   | Year | Category A | Category B | Total Revenue |
-   |------|------------|------------|---------------|
-   | 2022 | 1000       | 500        | 1500          |
-   | 2023 | 1200       | 600        | 1800          |
-
-
-
-If no revenue data is found in the documents, output:
+If no revenue data is found, output only:
 "[DATA NOT AVAILABLE] Revenue data was not found in the uploaded documents."
 """

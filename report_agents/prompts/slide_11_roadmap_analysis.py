@@ -1,4 +1,4 @@
-"""Roadmap Market Analysis slide — comparative market assessment"""
+"""Market Analysis slide — comparative market assessment"""
 
 PROMPT = """# ROLE
 Act as a Senior Market Intelligence Analyst and Product Strategist. You are an expert at benchmarking company against industry standards and competitor trajectories.

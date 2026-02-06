@@ -1,4 +1,4 @@
-"""Company Roadmap extraction: structured timeline from images/documents, then visual timeline image."""
+"""Company Roadmap extraction: structured timeline from images/documents, then visual timeline image + markdown table."""
 
 PROMPT = """The full document content and any images have been provided above. Use them as the source.
 
@@ -46,6 +46,9 @@ Required JSON format for the tool (use the exact keys):
 Rules:
 - Extract all milestones from the source; preserve exact wording for headline and description where possible.
 - If the document distinguishes completed vs future, map completed to "past", near-term future to "near_future", and long-term/exit to "long_term".
-- Call generate_roadmap_timeline once with the full list. After calling the tool, output only a single short "Sources" line (e.g. "Sources: filename.pdf") then stop.
+- Call generate_roadmap_timeline once with the full list.
+- After calling the tool, output **exactly one markdown table** listing the milestones you used, then stop.
+  - Table columns (in this order): `Period`, `Headline`, `Description`, `Status`.
+  - One row per milestone, ordered chronologically (oldest first).
 - If no roadmap data is found, output: "[DATA NOT AVAILABLE] No roadmap milestones found in the provided documents."
 """

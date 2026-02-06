@@ -11,7 +11,6 @@ import markdown as md_lib
 from jinja2 import Template
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
 from weasyprint import HTML
 
 from google.genai import types as genai_types
@@ -20,7 +19,6 @@ from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType
 from report_agents.utils.pptx_styles import (
     SLIDE_WIDTH,
     SLIDE_HEIGHT,
-    TITLE_BAR_HEIGHT,
     CONTENT_LEFT,
     CONTENT_TOP,
     CONTENT_WIDTH,
@@ -31,11 +29,6 @@ from report_agents.utils.pptx_styles import (
     WHITE,
     add_title_bar,
     render_markdown_to_textbox,
-    _split_markdown_blocks,
-    _blocks_to_markdown,
-    _parse_md_table,
-    _add_table_shape,
-    _clean_markdown_text,
 )
 from report_agents.utils.state_keys import slide_content_key, slide_chart_image_key
 
@@ -127,48 +120,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
   th { background: var(--bar); color: #ffffff; text-align: center; }
   td { text-align: left; }
   tr:nth-child(even) { background: #f9f9f9; }
-
-  /* Slide 11 specific column widths to ensure containment */
-  .slide-11 td:nth-child(1), .slide-11 th:nth-child(1) { width: 17% !important; }
-  .slide-11 td:nth-child(2), .slide-11 th:nth-child(2) { width: 41% !important; }
-  .slide-11 td:nth-child(3), .slide-11 th:nth-child(3) { width: 42% !important; }
-
-  /* Slide 14 specific side-by-side */
-  .slide-14-grid {
-    display: flex;
-    justify-content: space-between;
-    gap: 2%; /* Use percentage for more robust layout */
-    height: 100%;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .left-col { 
-    width: 51%; 
-    font-size: 8pt; 
-    box-sizing: border-box;
-  }
-  .left-col p { margin: 0 0 4px 0; line-height: 1.2; }
-  .right-col { 
-    width: 44%; 
-    box-sizing: border-box;
-    overflow: hidden; /* Prevent horizontal overflow */
-  }
-  .right-col table { 
-    font-size: 6pt; 
-    line-height: 1.1;
-    table-layout: fixed; /* Force column widths to obey */
-    width: 99%;
-    max-width: 99%;
-    word-wrap: break-word;
-    word-break: break-all;
-  }
-  .right-col td, .right-col th {
-    padding: 2px 4px !important;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-  }
-  .right-col h4 { margin: 0 0 4px 0; color: var(--accent); font-size: 9pt; }
-
+ 
   /* Cover layout */
   .cover { background: white; padding: 0.75in; box-sizing: border-box; }
   .cover-stack {
@@ -189,11 +141,27 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 
   /* Utility to remove h2 from inner markdown if it's already in title bar */
   .inner-content h2 { display: none; }
+  .inner-content strong, .inner-content b { font-weight: bold; }
+
+  /* Chart slides: chart fills remaining content area below text/table */
+  .slide-has-chart .content-area .inner-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .slide-has-chart .content-area .inner-content > img {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    object-fit: contain;
+    object-position: top left;
+  }
 </style>
 </head>
 <body>
 {% for section in sections %}
-<div class="slide slide-{{ section.slide_number }}{% if section.is_cover %} cover{% endif %}">
+<div class="slide slide-{{ section.slide_number }}{% if section.is_cover %} cover{% endif %}{% if section.chart_img %} slide-has-chart{% endif %}">
   {% if section.is_cover %}
     <div class="cover-stack">
       <div class="cover-date">{{ section.cover_date }}</div>
@@ -208,22 +176,12 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
   {% else %}
     <div class="title-bar">{{ section.title }}</div>
     <div class="content-area">
-      {% if section.is_slide_14 %}
-        <div class="slide-14-grid">
-          <div class="left-col inner-content">{{ section.slide_14_left_html }}</div>
-          <div class="right-col">
-            <h4>Investment Criteria Assessment</h4>
-            {{ section.slide_14_right_html }}
-          </div>
-        </div>
-      {% else %}
-        <div class="inner-content">
-          {{ section.html_content }}
-          {% if section.chart_img %}
-          <img src="data:image/png;base64,{{ section.chart_img }}" style="max-height: 4in;" />
-          {% endif %}
-        </div>
-      {% endif %}
+      <div class="inner-content">
+        {{ section.html_content }}
+        {% if section.chart_img %}
+        <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart" />
+        {% endif %}
+      </div>
     </div>
   {% endif %}
 </div>
@@ -343,20 +301,21 @@ async def assemble_report(
         if chart_filename and load_artifact_fn:
             chart_bytes = await load_artifact_fn(chart_filename)
 
-        remaining = ""
-        # Roadmap can have continuation pages (slide_NN_chart_image_2, _3, ...)
         roadmap_continuations = []
-        if spec.slide_type == SlideType.ROADMAP:
-            for p in range(2, 10):
+        if spec.slide_type == SlideType.ROADMAP and load_artifact_fn:
+            for p in range(2, 15):
                 key = f"slide_{spec.slide_number:02d}_chart_image_{p}"
                 fn = state.get(key, "")
-                if fn and load_artifact_fn:
+                if fn:
                     b = await load_artifact_fn(fn)
                     if b:
                         roadmap_continuations.append(b)
+                    else:
+                        break
                 else:
                     break
 
+        remaining = ""
         if spec.slide_number == 1:
             date_y = Inches(0.7)
             logo_y = SLIDE_HEIGHT - Inches(0.9)
@@ -421,57 +380,6 @@ async def assemble_report(
                 Inches(6.75), CONTENT_TOP,
                 Inches(5.8), Inches(4.0),
             )
-        elif spec.slide_number == 14:
-            # Surgical side-by-side layout only for Slide 14 Recommendations
-            blocks = _split_markdown_blocks(pptx_content)
-            txt_lines, tbl_blk = [], None
-            for bt, bl in blocks:
-                if "## Investment Criteria Assessment" in "\n".join(bl): continue
-                if bt == "table": tbl_blk = (bt, bl)
-                else: txt_lines.extend(bl)
-            
-            if txt_lines:
-                # Use a single large textbox to ensure nothing is truncated by split logic
-                txBox = slide.shapes.add_textbox(CONTENT_LEFT, TITLE_BAR_HEIGHT + Inches(0.1), Inches(6.2), Inches(6.3))
-                tf = txBox.text_frame; tf.word_wrap = True
-                from report_agents.utils.pptx_styles import _render_text_lines
-                _render_text_lines(tf, txt_lines, is_first_block=True)
-                
-                # Aggressive font and spacing shrinkage for Slide 14 (strictly target only this box)
-                for p in tf.paragraphs:
-                    p.space_after = Pt(0)
-                    p.space_before = Pt(0)
-                    p.line_spacing = 0.8 # Tighten further
-                    for run in p.runs:
-                        if run.font.size:
-                            # Headers (usually Pt 14) -> Pt 9, Body (usually Pt 10) -> Pt 6.5
-                            run.font.size = Pt(run.font.size.pt * 0.65)
-                        else:
-                            run.font.size = Pt(6.5)
-            if tbl_blk:
-                h, r = _parse_md_table(tbl_blk[1])
-                # Locally implement dense table for Slide 14 to prevent overflow
-                num_rows = 1 + len(r); num_cols = len(h)
-                # Position table below title bar, matching left column
-                t_left = CONTENT_LEFT + Inches(6.4); t_top = TITLE_BAR_HEIGHT + Inches(0.4); t_width = Inches(5.8)
-                # Tighter row height
-                t_height = Inches(0.24) * num_rows
-                t_shape = slide.shapes.add_table(num_rows, num_cols, t_left, t_top, t_width, t_height)
-                t = t_shape.table
-                from pptx.enum.text import PP_ALIGN
-                for c_idx, h_txt in enumerate(h):
-                    cell = t.cell(0, c_idx); cell.text = _clean_markdown_text(h_txt); cell.fill.solid(); cell.fill.fore_color.rgb = PRIMARY_COLOR
-                    p = cell.text_frame.paragraphs[0]; p.font.size = Pt(8); p.font.bold = True; p.font.color.rgb = WHITE; p.alignment = PP_ALIGN.CENTER
-                for r_idx, r_cells in enumerate(r):
-                    for c_idx, c_txt in enumerate(r_cells):
-                        cell = t.cell(r_idx+1, c_idx); cell.text = _clean_markdown_text(c_txt)
-                        if r_idx % 2 == 1: cell.fill.solid(); cell.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
-                        p = cell.text_frame.paragraphs[0]; p.font.size = Pt(6.5); p.font.color.rgb = TEXT_COLOR; p.alignment = PP_ALIGN.LEFT
-                
-                tx = slide.shapes.add_textbox(CONTENT_LEFT+Inches(6.4), TITLE_BAR_HEIGHT + Inches(0.1), Inches(4.0), Inches(0.3))
-                p = tx.text_frame.paragraphs[0]; p.text = "Investment Criteria Assessment"
-                p.font.size = Pt(12); p.font.bold = True; p.font.color.rgb = ACCENT_COLOR
-            remaining = ""
         else:
             remaining = render_markdown_to_textbox(slide, pptx_content)
 
@@ -510,44 +418,34 @@ async def assemble_report(
             add_title_bar(cont_slide, spec.title + " (cont.)")
             remaining = render_markdown_to_textbox(cont_slide, remaining)
 
+        # Roadmap continuation pages (one PPTX slide per extra chart image)
+        for cont_bytes in roadmap_continuations:
+            cont_slide = prs.slides.add_slide(slide_layout)
+            add_title_bar(cont_slide, spec.title + " (cont.)")
+            img_stream = io.BytesIO(cont_bytes)
+            cont_slide.shapes.add_picture(
+                img_stream,
+                CONTENT_LEFT,
+                CONTENT_TOP,
+                CONTENT_WIDTH,
+                Inches(5.8),
+            )
+            for s in cont_slide.shapes:
+                if s.top < Inches(0.1) and s.width > Inches(10) and hasattr(s, "text_frame"):
+                    for p in s.text_frame.paragraphs:
+                        p.font.size = Pt(24)
+                        p.font.color.rgb = WHITE
+                        p.font.bold = True
+                    break
+
         # --- Build PDF section ---
-        is_slide_14 = (spec.slide_number == 14)
-        slide_14_left_html = ""
-        slide_14_right_html = ""
-        
-        if is_slide_14:
-            blocks = _split_markdown_blocks(content)
-            left_md_lines = []
-            right_md_lines = []
-            for bt, bl in blocks:
-                if bt == "table":
-                    right_md_lines.extend(bl)
-                else:
-                    # Skip the Assessment header if it exists in text to match PPTX sidebar title
-                    if any("## Investment Criteria Assessment" in line for line in bl):
-                        continue
-                    left_md_lines.extend(bl)
-            
-            slide_14_left_html = md_lib.markdown(
-                _strip_code_fences("\n".join(left_md_lines)), 
-                extensions=["tables", "fenced_code"]
-            )
-            slide_14_right_html = md_lib.markdown(
-                _strip_code_fences("\n".join(right_md_lines)), 
-                extensions=["tables", "fenced_code"]
-            )
-            html_content = "" # Not used for slide 14
-        else:
-            # Only strip code fences for Slide 11 to handle the prompt's mandated markdown blocks
-            # other slides remain untouched to ensure zero global impact.
-            raw_content = content
-            if spec.slide_number == 11:
-                raw_content = _strip_code_fences(content)
-                
-            html_content = md_lib.markdown(
-                raw_content,
-                extensions=["tables", "fenced_code"],
-            )
+        # Strip fenced wrappers (e.g. ```markdown ... ```) so inner content is rendered.
+        # Otherwise the whole response is output as a code block and tables stay raw.
+        raw_for_pdf = _strip_code_fences(content)
+        html_content = md_lib.markdown(
+            raw_for_pdf,
+            extensions=["tables", "fenced_code"],
+        )
 
         chart_img_b64 = None
         if chart_bytes:
@@ -564,14 +462,24 @@ async def assemble_report(
             "html_content": html_content,
             "chart_img": chart_img_b64,
             "is_cover": spec.slide_number == 1,
-            "is_slide_14": is_slide_14,
-            "slide_14_left_html": slide_14_left_html,
-            "slide_14_right_html": slide_14_right_html,
             "cover_logo_svg": INFINITY_TEXT_LOGO_SVG if spec.slide_number == 1 else "",
             "infinity_logo_png": INFINITY_LOGO_PNG_B64 if spec.slide_number == 1 else "",
             "cover_date": cover_date,
             "cover_title": cover_title,
         })
+        # Roadmap continuation pages in PDF (one page per extra chart image)
+        for cont_bytes in roadmap_continuations:
+            pdf_sections.append({
+                "slide_number": spec.slide_number,
+                "title": spec.title + " (cont.)",
+                "html_content": "",
+                "chart_img": base64.b64encode(cont_bytes).decode("utf-8"),
+                "is_cover": False,
+                "cover_logo_svg": "",
+                "infinity_logo_png": "",
+                "cover_date": "",
+                "cover_title": "",
+            })
 
         slides_generated += 1
 

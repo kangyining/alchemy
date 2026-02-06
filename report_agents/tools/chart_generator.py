@@ -138,23 +138,126 @@ def _render_matplotlib_bar_chart(data: dict) -> bytes:
 
 
 def _render_matplotlib_line_chart(data: dict) -> bytes:
-    """Render a line chart with matplotlib, return PNG bytes."""
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for i, series in enumerate(data.get("series", [{"values": data.get("values", [])}])):
-        label = series.get("label", "")
-        values = series["values"]
-        ax.plot(
-            data["categories"], values,
-            marker="o", color=MPL_COLORS[i % len(MPL_COLORS)], label=label, linewidth=2,
-        )
+    """Render a line chart with matplotlib, return PNG bytes.
+
+    Dual y-axes when there are two series and y_left_label/y_right_label are provided
+    (e.g. revenue on left, users/clients on right).
+    """
+    series_list = data.get("series", [{"values": data.get("values", [])}])
+    categories = data.get("categories", [])
+
+    use_dual_axis = (
+        len(series_list) >= 2
+        and (data.get("y_left_label") or data.get("y_right_label"))
+    )
+
+    if use_dual_axis:
+        fig, ax_left = plt.subplots(figsize=(12, 6.2))
+        ax_right = ax_left.twinx()
+
         fmt = data.get("value_format", "{:,.1f}")
-        for x, y in zip(data["categories"], values):
-            ax.annotate(fmt.format(y), (x, y), textcoords="offset points", xytext=(0, 10), ha="center", fontsize=9)
-    ax.set_title(data.get("title", ""), fontsize=16, fontweight="bold", color="#1A3C6E")
-    ax.set_xlabel(data.get("x_label", ""), fontsize=12)
-    ax.set_ylabel(data.get("y_label", ""), fontsize=12)
-    if any(s.get("label") for s in data.get("series", [])):
-        ax.legend()
+
+        # Left axis: revenue
+        rev_series = series_list[0]
+        rev_vals = rev_series["values"]
+        color_left = MPL_COLORS[0]
+        line_left, = ax_left.plot(
+            categories,
+            rev_vals,
+            marker="o",
+            color=color_left,
+            label=rev_series.get("label", ""),
+            linewidth=2,
+        )
+        for x, y in zip(categories, rev_vals):
+            ax_left.annotate(
+                fmt.format(y),
+                (x, y),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                fontsize=8,
+                color=color_left,
+            )
+        y_left_label = data.get("y_left_label") or "Revenue (USD)"
+        y_right_label = data.get("y_right_label") or "Number of Users"
+        ax_left.set_ylabel(y_left_label, fontsize=12, color=color_left)
+        ax_left.tick_params(axis="y", labelcolor=color_left)
+
+        # Right axis: users
+        user_series = series_list[1]
+        user_vals = user_series["values"]
+        color_right = MPL_COLORS[1]
+        line_right, = ax_right.plot(
+            categories,
+            user_vals,
+            marker="o",
+            color=color_right,
+            label=user_series.get("label", ""),
+            linewidth=2,
+        )
+        for x, y in zip(categories, user_vals):
+            ax_right.annotate(
+                fmt.format(y),
+                (x, y),
+                textcoords="offset points",
+                xytext=(0, -12),
+                ha="center",
+                fontsize=8,
+                color=color_right,
+            )
+        ax_right.set_ylabel(y_right_label, fontsize=12, color=color_right)
+        ax_right.tick_params(axis="y", labelcolor=color_right)
+
+        ax_left.set_title(
+            data.get("title", ""),
+            fontsize=16,
+            fontweight="bold",
+            color="#1A3C6E",
+        )
+        ax_left.set_xlabel(data.get("x_label", ""), fontsize=12)
+
+        # Combined legend
+        lines = [line_left, line_right]
+        labels = [l.get_label() for l in lines]
+        ax_left.legend(lines, labels, loc="upper left")
+        ax_left.set_ylim(bottom=0)
+        ax_right.set_ylim(bottom=0)
+    else:
+        fig, ax = plt.subplots(figsize=(12, 6.2))
+        for i, series in enumerate(series_list):
+            label = series.get("label", "")
+            values = series["values"]
+            ax.plot(
+                categories,
+                values,
+                marker="o",
+                color=MPL_COLORS[i % len(MPL_COLORS)],
+                label=label,
+                linewidth=2,
+            )
+            fmt = data.get("value_format", "{:,.1f}")
+            for x, y in zip(categories, values):
+                ax.annotate(
+                    fmt.format(y),
+                    (x, y),
+                    textcoords="offset points",
+                    xytext=(0, 10),
+                    ha="center",
+                    fontsize=9,
+                )
+        ax.set_title(
+            data.get("title", ""),
+            fontsize=16,
+            fontweight="bold",
+            color="#1A3C6E",
+        )
+        ax.set_xlabel(data.get("x_label", ""), fontsize=12)
+        ax.set_ylabel(data.get("y_label", ""), fontsize=12)
+        if any(s.get("label") for s in series_list):
+            ax.legend()
+        ax.set_ylim(bottom=0)
+
     plt.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
@@ -180,8 +283,8 @@ def _render_matplotlib_pie_chart(data: dict) -> bytes:
     return buf.read()
 
 
-# Max milestones per roadmap page before continuing on next page
-ROADMAP_MILESTONES_PER_PAGE = 8
+# Max milestones per image so each fits one PDF page (content ~6.9in; fig_h = n*0.75)
+ROADMAP_MILESTONES_PER_PAGE = 9
 # Cell spacing: each box has headline on line 1, description on line 2 below it
 ROADMAP_CELL_STEP = 0.095
 ROADMAP_BOX_HEIGHT = 0.078
@@ -329,8 +432,9 @@ def make_chart_tool(chart_type: str, slide_number: int):
     _tool.__doc__ = f"""Generate a {type_desc} from structured data.
 
     Args:
-        data_json: JSON string with keys: categories (list[str]), values (list[float]),
-                   title (str), x_label (str), y_label (str), value_format (str, optional)
+        data_json: JSON string with keys: categories (list[str]), series (list with label/values),
+                   title (str), x_label (str), y_label (str), value_format (str, optional).
+                   For dual y-axis line charts: y_left_label (str, optional), y_right_label (str, optional).
 
     Returns:
         Status dict with generation method used.
@@ -358,19 +462,18 @@ def make_roadmap_tool(slide_number: int):
             page_suffix = f"(cont. p{p + 1})" if len(chunks) > 1 and p > 0 else ""
             image_bytes = _render_roadmap_timeline_page(title, chunk, page_suffix)
             if p == 0:
-                filename = f"slide_{slide_number:02d}_chart.png"
-                key = f"slide_{slide_number:02d}_chart_image"
+                await _save_chart_artifact(tool_context, slide_number, image_bytes)
             else:
                 filename = f"slide_{slide_number:02d}_chart_{p + 1}.png"
                 key = f"slide_{slide_number:02d}_chart_image_{p + 1}"
-            artifact = genai_types.Part.from_bytes(data=image_bytes, mime_type="image/png")
-            await tool_context.save_artifact(filename, artifact)
-            tool_context.state[key] = filename
+                artifact = genai_types.Part.from_bytes(data=image_bytes, mime_type="image/png")
+                await tool_context.save_artifact(filename, artifact)
+                tool_context.state[key] = filename
         return {"status": "success", "chart_type": "roadmap", "pages": len(chunks)}
 
     _tool.__name__ = "generate_roadmap_timeline"
     _tool.__qualname__ = "generate_roadmap_timeline"
-    _tool.__doc__ = """Generate a strategic roadmap timeline image from structured data. If many milestones, continues on next page(s).
+    _tool.__doc__ = """Generate a strategic roadmap timeline from structured data. Pass the full milestones list; if it exceeds one page, multiple images are generated (each fits one PDF page).
 
     Args:
         data_json: JSON string with keys: title (str), milestones (list of objects).

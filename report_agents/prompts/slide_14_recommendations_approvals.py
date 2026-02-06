@@ -1,38 +1,34 @@
 """Recommendations & Approvals slide prompt."""
 
 PROMPT = """SYSTEM INSTRUCTION:
-Return ONLY raw Markdown source.
-The response MUST consist of exactly ONE fenced code block marked as ```markdown.
+Return ONLY raw Markdown table.
+
 
 USER TASK:
+Act as a senior investment analyst. You are performing a DETAILED INFORMATION EXTRACTION from investment committee (IC) slide decks. 
+Provide comprehensive, informative content for each section based on the provided documents.
 
-You are performing a DETAILED INFORMATION EXTRACTION task. 
-Provide comprehensive, informative content for each section.
-
+# OUTPUT FORMAT
+Return **ONLY** a single Markdown table.
+- Do not include any introductory text, or narrative outside the table.
+- The table must have exactly two columns: `topic`, `contents`
+- within each contents row, use bullet points for the subtopic under the current topic.
 ==================================================
 
 Structure:
 
-## Investment Criteria Assessment
-| Criteria | Assessment |
-| :--- | :--- |
-| Geography | [Detailed assessment] |
-| Industry focus | [Detailed assessment] |
-| Development stage | [Detailed assessment] |
-| Risk/reward profile | [Detailed assessment] |
-| Control | [Detailed assessment] |
-| Allocation to Infinity Capital | [Detailed assessment] |
-| Investment horizon | [Detailed assessment] |
-| Opportunity prioritization | [Detailed assessment] |
+## Non-Alignment with Mandate
+[Extract details regarding non-alignment with the Investment Committee (IC) mandate.]
+
 
 ## Key Considerations
-[Extract and provide detailed, comprehensive paragraphs covering key strategic and financial considerations. Use full descriptive paragraphs.]
+[Extract and provide covering key strategic and financial considerations.]
 
 ## Recommendations & Approvals
-[Extract and provide detailed, comprehensive paragraphs on finalized investment recommendations and approvals. Use full descriptive paragraphs.]
+[Extract and provide on finalized investment recommendations and approvals.]
 
 Rules:
-- PROVIDE COMPLETE, DETAILED PARAGRAPHS. 
-- Ensure high information density.
-- No preamble, no sources.
+- PROVIDE COMPLETE, DETAILED PARAGRAPHS using the specific terminology from the source.
+- Ensure high information density (include specific numbers: $, %, and dates).
+- If information is missing from the source, mark as [NOT DISCLOSED].
 """
