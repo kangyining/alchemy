@@ -14,6 +14,8 @@ from google.cloud import documentai_v1 as documentai
 from google.genai import types as genai_types
 from pypdf import PdfReader, PdfWriter
 
+from report_agents.services.docai_cache import get_docai_cache
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -393,6 +395,14 @@ async def _process_single_file(
     Adds a delay before non-first requests to respect rate limits.
     """
     source = _original_source(name)
+
+    # 1. Check persistent cache first
+    cache = get_docai_cache()
+    cached_result = cache.get(file_bytes)
+    if cached_result:
+        logger.info("Using cached DocAI result for %s", name)
+        return cached_result["text_sections"], cached_result["tables"], None
+
     async with semaphore:
         if not is_first and _DOCAI_INTER_REQUEST_DELAY > 0:
             logger.info("Waiting %.1fs before next Document AI request...", _DOCAI_INTER_REQUEST_DELAY)
@@ -441,6 +451,13 @@ async def _process_single_file(
                 "Parsed %s: %d text section(s), %d table(s)",
                 name, len(text_sections), len(tables),
             )
+
+            # 2. Store in cache
+            cache.set(file_bytes, {
+                "text_sections": text_sections,
+                "tables": tables
+            }, mime_type=mime_type)
+
             return text_sections, tables, None
 
         except Exception as e:
