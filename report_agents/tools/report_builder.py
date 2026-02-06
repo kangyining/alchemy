@@ -64,7 +64,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 <html>
 <head>
 <style>
-  @page { size: landscape; margin: 0; }
+  @page { size: 13.333in 7.5in; margin: 0; }
   :root {
     --ink: #111111;
     --muted: #7a7a7a;
@@ -80,6 +80,8 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     height: 7.5in;   /* Matching SLIDE_HEIGHT */
     position: relative; 
     overflow: hidden;
+    padding-right: 0.5in; /* Add safe buffer on the right */
+    box-sizing: border-box;
   }
   .slide:last-child { page-break-after: avoid; }
   
@@ -93,10 +95,11 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     font-size: 24pt;
     font-weight: bold;
     text-transform: capitalize;
+    margin-right: -0.5in; /* Offset slide padding for title bar */
   }
 
   .content-area {
-    padding: 0.25in 0.5in;
+    padding: 0.25in 0.5in 0.25in 0.5in;
     height: 6.9in;
     box-sizing: border-box;
   }
@@ -106,22 +109,65 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
   ul { margin: 0 0 10px 18px; }
   li { margin: 2px 0; }
   
-  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-  th, td { border: 1px solid var(--grid); padding: 6px 8px; font-size: 9.5pt; }
+  table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    max-width: 100%; 
+    margin: 8px 0; 
+    table-layout: fixed; /* Force columns to stay in box */
+    box-sizing: border-box; 
+  }
+  th, td { 
+    border: 1px solid var(--grid); 
+    padding: 6px 8px; 
+    font-size: 9.5pt; 
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
   th { background: var(--bar); color: #ffffff; text-align: center; }
   td { text-align: left; }
   tr:nth-child(even) { background: #f9f9f9; }
 
+  /* Slide 11 specific column widths to ensure containment */
+  .slide-11 td:nth-child(1), .slide-11 th:nth-child(1) { width: 17% !important; }
+  .slide-11 td:nth-child(2), .slide-11 th:nth-child(2) { width: 41% !important; }
+  .slide-11 td:nth-child(3), .slide-11 th:nth-child(3) { width: 42% !important; }
+
   /* Slide 14 specific side-by-side */
   .slide-14-grid {
     display: flex;
-    gap: 0.4in;
+    justify-content: space-between;
+    gap: 2%; /* Use percentage for more robust layout */
     height: 100%;
+    width: 100%;
+    box-sizing: border-box;
   }
-  .left-col { width: 55%; font-size: 8.5pt; }
-  .right-col { width: 45%; }
-  .right-col table { font-size: 7pt; }
-  .right-col h4 { margin: 0 0 5px 0; color: var(--accent); font-size: 12pt; }
+  .left-col { 
+    width: 51%; 
+    font-size: 8pt; 
+    box-sizing: border-box;
+  }
+  .left-col p { margin: 0 0 4px 0; line-height: 1.2; }
+  .right-col { 
+    width: 44%; 
+    box-sizing: border-box;
+    overflow: hidden; /* Prevent horizontal overflow */
+  }
+  .right-col table { 
+    font-size: 6pt; 
+    line-height: 1.1;
+    table-layout: fixed; /* Force column widths to obey */
+    width: 99%;
+    max-width: 99%;
+    word-wrap: break-word;
+    word-break: break-all;
+  }
+  .right-col td, .right-col th {
+    padding: 2px 4px !important;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  .right-col h4 { margin: 0 0 4px 0; color: var(--accent); font-size: 9pt; }
 
   /* Cover layout */
   .cover { background: white; padding: 0.75in; box-sizing: border-box; }
@@ -147,7 +193,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 </head>
 <body>
 {% for section in sections %}
-<div class="slide{% if section.is_cover %} cover{% endif %}">
+<div class="slide slide-{{ section.slide_number }}{% if section.is_cover %} cover{% endif %}">
   {% if section.is_cover %}
     <div class="cover-stack">
       <div class="cover-date">{{ section.cover_date }}</div>
@@ -407,7 +453,7 @@ async def assemble_report(
                 # Locally implement dense table for Slide 14 to prevent overflow
                 num_rows = 1 + len(r); num_cols = len(h)
                 # Position table below title bar, matching left column
-                t_left = CONTENT_LEFT + Inches(6.5); t_top = TITLE_BAR_HEIGHT + Inches(0.4); t_width = Inches(6.0)
+                t_left = CONTENT_LEFT + Inches(6.4); t_top = TITLE_BAR_HEIGHT + Inches(0.4); t_width = Inches(5.8)
                 # Tighter row height
                 t_height = Inches(0.24) * num_rows
                 t_shape = slide.shapes.add_table(num_rows, num_cols, t_left, t_top, t_width, t_height)
@@ -422,7 +468,7 @@ async def assemble_report(
                         if r_idx % 2 == 1: cell.fill.solid(); cell.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
                         p = cell.text_frame.paragraphs[0]; p.font.size = Pt(6.5); p.font.color.rgb = TEXT_COLOR; p.alignment = PP_ALIGN.LEFT
                 
-                tx = slide.shapes.add_textbox(CONTENT_LEFT+Inches(6.5), TITLE_BAR_HEIGHT + Inches(0.1), Inches(4.0), Inches(0.3))
+                tx = slide.shapes.add_textbox(CONTENT_LEFT+Inches(6.4), TITLE_BAR_HEIGHT + Inches(0.1), Inches(4.0), Inches(0.3))
                 p = tx.text_frame.paragraphs[0]; p.text = "Investment Criteria Assessment"
                 p.font.size = Pt(12); p.font.bold = True; p.font.color.rgb = ACCENT_COLOR
             remaining = ""
@@ -482,12 +528,24 @@ async def assemble_report(
                         continue
                     left_md_lines.extend(bl)
             
-            slide_14_left_html = md_lib.markdown("\n".join(left_md_lines), extensions=["tables", "fenced_code"])
-            slide_14_right_html = md_lib.markdown("\n".join(right_md_lines), extensions=["tables", "fenced_code"])
+            slide_14_left_html = md_lib.markdown(
+                _strip_code_fences("\n".join(left_md_lines)), 
+                extensions=["tables", "fenced_code"]
+            )
+            slide_14_right_html = md_lib.markdown(
+                _strip_code_fences("\n".join(right_md_lines)), 
+                extensions=["tables", "fenced_code"]
+            )
             html_content = "" # Not used for slide 14
         else:
+            # Only strip code fences for Slide 11 to handle the prompt's mandated markdown blocks
+            # other slides remain untouched to ensure zero global impact.
+            raw_content = content
+            if spec.slide_number == 11:
+                raw_content = _strip_code_fences(content)
+                
             html_content = md_lib.markdown(
-                content,
+                raw_content,
                 extensions=["tables", "fenced_code"],
             )
 
@@ -501,6 +559,7 @@ async def assemble_report(
             cover_date, cover_title = _extract_cover_lines(content)
 
         pdf_sections.append({
+            "slide_number": spec.slide_number,
             "title": spec.title,
             "html_content": html_content,
             "chart_img": chart_img_b64,
