@@ -48,6 +48,7 @@ CRITICAL RULES — you MUST follow these:
 3. End your output with a "Sources" section citing the filename for each figure.
 4. For any calculations (YoY growth, margins, ratios), use the calculate_financial_metrics tool — do NOT compute numbers yourself.
 5. Output your response as markdown. Highlight key points with **bold** so they stand out in the PDF.
+6. DATA SOURCE PRIORITY: If `query_financial_data` is available, you MUST call it first to get numerical data from SQLite. If the query returns rows, use that data — do NOT pull the same numbers from the document text. Only fall back to document text when the SQL query returns no rows or no relevant columns for what you need.
 """
 
 COVER_PAGE_SUFFIX = """

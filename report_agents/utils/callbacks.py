@@ -65,31 +65,42 @@ def prepare_full_context_request(
 ) -> None:
     """before_model_callback for TABLE/CHART/MIXED slides.
 
-    Injects full text context for non-spreadsheet sources, plus table schema
-    metadata for spreadsheet data so the agent can query as needed.
-
-    This avoids injecting full spreadsheet tables while preserving narrative
-    text from PDFs/docs.
+    When SQLite tables are available, inject ONLY the schema metadata (no PDF
+    text) so the model is forced to call query_financial_data for any numbers.
+    PDF text is only injected as a fallback when no SQLite data exists, or as
+    secondary context when the model needs qualitative/narrative info that
+    wouldn't be in a spreadsheet.
     """
     strip_file_parts(callback_context, llm_request)
 
-    # Inject non-spreadsheet text context (full, untruncated)
     text_context = callback_context.state.get("full_text_document_context", "")
-
-    # Inject schema metadata for spreadsheet data
     table_schemas = callback_context.state.get("table_schemas", "")
-    context_blocks: list[str] = []
-    if text_context:
-        context_blocks.append(text_context)
+
+    context_blocks = []
+
     if table_schemas:
+        # SQL data is available — give schema only, hold back raw PDF text
+        # so the model can't shortcut past query_financial_data
         context_blocks.append(
             f"{table_schemas}\n\n"
-            "Use the `query_financial_data` tool to fetch specific data you need. "
+            "Financial data is loaded in SQLite. You MUST use the "
+            "`query_financial_data` tool to retrieve any numbers, figures, or "
+            "metrics. Do NOT extract numerical data from the document text below "
+            "when the database has the information.\n\n"
             "Example queries:\n"
-            "- 'Get revenue and net income figures'\n"
+            "- 'Get total revenue and number of users by year'\n"
             "- 'Show all data from the Income Statement sheet'\n"
-            "- 'Find gross profit margin and operating expenses'"
+            "- 'Get revenue by segment and year'"
         )
+        # Only pass a trimmed note that document text exists for qualitative context
+        if text_context:
+            context_blocks.append(
+                "--- DOCUMENT TEXT (use for qualitative/narrative context only, "
+                "NOT for numbers or financial figures) ---\n\n" + text_context
+            )
+    elif text_context:
+        # No SQL data at all — fall back to full PDF text as before
+        context_blocks.append(text_context)
 
     if context_blocks:
         context_content = genai_types.Content(
