@@ -39,7 +39,7 @@ MODEL = Gemini(
 )
 
 # Seconds to pause between slide agents to spread token usage across TPM windows
-INTER_SLIDE_DELAY_SECONDS = 10
+INTER_SLIDE_DELAY_SECONDS = 20
 
 
 class ThrottleAgent(BaseAgent):
@@ -72,8 +72,9 @@ def create_slide_agents() -> list[BaseAgent]:
     Each agent writes to a unique output_key in session state.
     """
     agents: list[BaseAgent] = []
-    allowed_slides = (1, 2, 4, 11, 12, 13, 14)
-    # allowed_slides = (4,)
+    allowed_slides = (1, 3)
+    # allowed_slides = (1, 2, 3, 4, 5, 6, 7)
+
     for spec in SLIDE_REGISTRY:
         if spec.slide_number not in allowed_slides:
             continue

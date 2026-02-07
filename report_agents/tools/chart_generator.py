@@ -4,10 +4,14 @@ import io
 import json
 import logging
 import os
+import warnings
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+# Suppress matplotlib categorical units messages (logged at INFO level)
+logging.getLogger("matplotlib.category").setLevel(logging.WARNING)
 from matplotlib.patches import FancyBboxPatch
 
 from google import genai
@@ -92,7 +96,14 @@ def _validate_chart_numbers(client, image_bytes: bytes, source_data: dict) -> bo
                 extracted_values.add(round(float(v), 1))
 
         # Check that all source values appear in the extracted values
-        source_values = {round(float(v), 1) for v in source_data.get("values", [])}
+        # Handle both flat 'values' and nested 'series' formats
+        if "values" in source_data:
+            raw_values = source_data["values"]
+        elif "series" in source_data and source_data["series"]:
+            raw_values = source_data["series"][0]["values"]
+        else:
+            raw_values = []
+        source_values = {round(float(v), 1) for v in raw_values}
         # Allow 10% tolerance per value
         for sv in source_values:
             found = any(abs(ev - sv) <= abs(sv) * 0.1 + 0.5 for ev in extracted_values)
@@ -121,12 +132,11 @@ def _render_matplotlib_bar_chart(data: dict) -> bytes:
     ax.set_title(data.get("title", ""), fontsize=16, fontweight="bold", color="#1A3C6E")
     ax.set_xlabel(data.get("x_label", ""), fontsize=12)
     ax.set_ylabel(data.get("y_label", ""), fontsize=12)
-    fmt = data.get("value_format", "{:,.1f}")
     for bar, val in zip(bars, data["values"]):
         ax.text(
             bar.get_x() + bar.get_width() / 2.0,
             bar.get_height(),
-            fmt.format(val),
+            _format_large_number(val),
             ha="center", va="bottom", fontsize=10,
         )
     plt.tight_layout()
@@ -155,8 +165,6 @@ def _render_matplotlib_line_chart(data: dict) -> bytes:
         fig, ax_left = plt.subplots(figsize=(12, 6.2))
         ax_right = ax_left.twinx()
 
-        fmt = data.get("value_format", "{:,.1f}")
-
         # Left axis: revenue
         rev_series = series_list[0]
         rev_vals = rev_series["values"]
@@ -171,12 +179,12 @@ def _render_matplotlib_line_chart(data: dict) -> bytes:
         )
         for x, y in zip(categories, rev_vals):
             ax_left.annotate(
-                fmt.format(y),
+                _format_large_number(y),
                 (x, y),
                 textcoords="offset points",
                 xytext=(0, 10),
                 ha="center",
-                fontsize=8,
+                fontsize=9,
                 color=color_left,
             )
         y_left_label = data.get("y_left_label") or "Revenue (USD)"
@@ -198,12 +206,12 @@ def _render_matplotlib_line_chart(data: dict) -> bytes:
         )
         for x, y in zip(categories, user_vals):
             ax_right.annotate(
-                fmt.format(y),
+                _format_large_number(y),
                 (x, y),
                 textcoords="offset points",
                 xytext=(0, -12),
                 ha="center",
-                fontsize=8,
+                fontsize=9,
                 color=color_right,
             )
         ax_right.set_ylabel(y_right_label, fontsize=12, color=color_right)
@@ -236,10 +244,9 @@ def _render_matplotlib_line_chart(data: dict) -> bytes:
                 label=label,
                 linewidth=2,
             )
-            fmt = data.get("value_format", "{:,.1f}")
             for x, y in zip(categories, values):
                 ax.annotate(
-                    fmt.format(y),
+                    _format_large_number(y),
                     (x, y),
                     textcoords="offset points",
                     xytext=(0, 10),
@@ -354,6 +361,19 @@ def _render_roadmap_timeline_page(title: str, milestones: list, page_title_suffi
     return buf.read()
 
 
+def _format_large_number(value: float) -> str:
+    """Format large numbers with K/M/B suffixes for readable chart labels."""
+    abs_val = abs(value)
+    if abs_val >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.1f}B"
+    elif abs_val >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    elif abs_val >= 1_000:
+        return f"{value / 1_000:.0f}K"
+    else:
+        return f"{value:,.0f}"
+
+
 MPL_RENDERERS = {
     "bar": _render_matplotlib_bar_chart,
     "line": _render_matplotlib_line_chart,
@@ -377,8 +397,16 @@ async def _generate_chart(
         client = _get_genai_client()
         type_desc = {"bar": "bar chart", "line": "line chart", "pie": "pie chart"}.get(chart_type, "chart")
 
+        # Handle both flat 'values' and nested 'series' formats
+        if "values" in data:
+            values = data["values"]
+        elif "series" in data and data["series"]:
+            values = data["series"][0]["values"]
+        else:
+            raise KeyError("values")
+
         values_desc = "\n".join(
-            f"  - {c}: {v}" for c, v in zip(data["categories"], data["values"])
+            f"  - {c}: {v}" for c, v in zip(data["categories"], values)
         )
         prompt = f"""{CHART_STYLE_PROMPT}
 Create a {type_desc} with title: "{data.get('title', '')}"
