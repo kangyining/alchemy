@@ -5,15 +5,33 @@ It wires together the three-phase pipeline:
   1. Ingestion — parse uploaded documents with Document AI (deterministic)
   2. Sequential slide generation — slide agents run one at a time to avoid rate limits
   3. Assembly — build PPTX + PDF from all slide outputs (deterministic)
+
+For testing, set USE_CACHED_INGESTION=true to skip Document AI calls and use
+cached parsing results. Generate the cache first with:
+    python -m report_agents.scripts.generate_cache
 """
 
 from google.adk.agents import SequentialAgent
 from google.adk.apps.app import App
 from google.adk.agents.context_cache_config import ContextCacheConfig
 
+import logging
+
+from report_agents.sub_agents.cached_ingestion_agent import cached_ingestion_agent
 from report_agents.sub_agents.ingestion_agent import ingestion_agent
 from report_agents.sub_agents.slide_agent_factory import create_slide_agents
 from report_agents.sub_agents.assembly_agent import assembly_agent
+
+logger = logging.getLogger(__name__)
+
+# Choose ingestion agent: set to True for testing (cached), False for production
+USE_CACHED_INGESTION = True
+
+active_ingestion_agent = cached_ingestion_agent if USE_CACHED_INGESTION else ingestion_agent
+if USE_CACHED_INGESTION:
+    logger.info("Using CACHED ingestion (testing mode)")
+else:
+    logger.info("Using Document AI ingestion (production mode)")
 
 # Create all slide agents from the registry
 slide_agents = create_slide_agents()
@@ -30,7 +48,7 @@ sequential_slide_generation = SequentialAgent(
 root_agent = SequentialAgent(
     name="FinancialReportOrchestrator",
     sub_agents=[
-        ingestion_agent,                # Phase 1: Parse documents (deterministic)
+        active_ingestion_agent,         # Phase 1: Parse documents (or load from cache)
         sequential_slide_generation,    # Phase 2: Generate slides sequentially
         assembly_agent,                 # Phase 3: Build PPTX + PDF (deterministic)
     ],
