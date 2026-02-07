@@ -13,15 +13,15 @@ TEXT_COLOR = RGBColor(0x11, 0x11, 0x11)  # Near-black
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 LIGHT_GRAY = RGBColor(0xF2, 0xF2, 0xF2)
 
-# Slide dimensions (16:9 widescreen)
-SLIDE_WIDTH = Inches(13.333)
-SLIDE_HEIGHT = Inches(7.5)
+# Slide dimensions (Letter landscape)
+SLIDE_WIDTH = Inches(11)
+SLIDE_HEIGHT = Inches(8.5)
 
 # Layout constants
 TITLE_BAR_HEIGHT = Inches(1.2)
 CONTENT_TOP = Inches(1.5)
 CONTENT_LEFT = Inches(0.75)
-CONTENT_WIDTH = Inches(11.8)
+CONTENT_WIDTH = Inches(9.5)
 CONTENT_HEIGHT = Inches(5.5)
 
 

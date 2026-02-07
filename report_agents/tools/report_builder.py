@@ -23,10 +23,8 @@ from report_agents.utils.pptx_styles import (
     CONTENT_TOP,
     CONTENT_WIDTH,
     CONTENT_HEIGHT,
-    PRIMARY_COLOR,
     ACCENT_COLOR,
     TEXT_COLOR,
-    WHITE,
     add_title_bar,
     render_markdown_to_textbox,
 )
@@ -57,7 +55,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 <html>
 <head>
 <style>
-  @page { size: 13.333in 7.5in; margin: 0; }
+  @page { size: landscape; margin: 0.75in; }
   :root {
     --ink: #111111;
     --muted: #7a7a7a;
@@ -66,103 +64,70 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     --light: #f2f2f2;
     --grid: #e5e5e5;
   }
-  body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); line-height: 1.3; margin: 0; padding: 0; }
-  .slide { 
-    page-break-after: always; 
-    width: 13.33in; /* Matching SLIDE_WIDTH */
-    height: 7.5in;   /* Matching SLIDE_HEIGHT */
-    position: relative; 
-    overflow: hidden;
-    padding-right: 0.5in; /* Add safe buffer on the right */
-    box-sizing: border-box;
-  }
+  body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); line-height: 1.4; }
+  .slide { page-break-after: always; padding: 0; position: relative; }
   .slide:last-child { page-break-after: avoid; }
-  
+  .content { font-size: 12pt; }
+  p { margin: 0 0 10px 0; }
+  ul { margin: 0 0 12px 18px; }
+  li { margin: 4px 0; }
+  blockquote {
+    margin: 10px 0; padding: 8px 12px; background: var(--light);
+    border-left: 4px solid var(--bar);
+  }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 14px 0; }
+  th, td { border: 1px solid var(--grid); padding: 8px 10px; font-size: 10.5pt; }
+  th { background: var(--bar); color: #ffffff; text-align: center; }
+  td { text-align: right; }
+  td:first-child, th:first-child { text-align: left; }
+  tr:nth-child(even) { background: #fafafa; }
+  img { max-width: 92%; height: auto; display: block; margin: 10px auto; }
+  h2 { font-size: 22pt; font-weight: 800; margin: 6px 0 8px 0; }
+  h3 {
+    font-size: 13.5pt; font-weight: 700; color: #ffffff;
+    background: var(--bar); padding: 6px 10px; margin: 12px 0 8px 0;
+  }
+
+  /* Title bar for content slides */
   .title-bar {
-    background-color: var(--bar);
-    color: white;
-    height: 0.6in;
-    display: flex;
-    align-items: center;
-    padding: 0 0.5in;
+    background: transparent;
+    color: var(--ink);
     font-size: 24pt;
     font-weight: bold;
-    text-transform: capitalize;
-    margin-right: -0.5in; /* Offset slide padding for title bar */
+    padding: 0;
+    margin: 0 0 0.25in 0;
   }
+  /* Hide h2 in content slides since title is rendered separately */
+  .slide:not(.cover) h2:first-child { display: none; }
 
-  .content-area {
-    padding: 0.25in 0.5in 0.25in 0.5in;
-    height: 6.9in;
-    box-sizing: border-box;
-  }
-
-  .content { font-size: 11pt; }
-  p { margin: 0 0 8px 0; }
-  ul { margin: 0 0 10px 18px; }
-  li { margin: 2px 0; }
-  
-  table { 
-    border-collapse: collapse; 
-    width: 100%; 
-    max-width: 100%; 
-    margin: 8px 0; 
-    table-layout: fixed; /* Force columns to stay in box */
-    box-sizing: border-box; 
-  }
-  th, td { 
-    border: 1px solid var(--grid); 
-    padding: 6px 8px; 
-    font-size: 9.5pt; 
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-  }
-  th { background: var(--bar); color: #ffffff; text-align: center; }
-  td { text-align: left; }
-  tr:nth-child(even) { background: #f9f9f9; }
- 
   /* Cover layout */
-  .cover { background: white; padding: 0.75in; box-sizing: border-box; }
+  .cover .content { padding: 0; }
   .cover-stack {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    height: 6in;
+    min-height: 6.5in;
   }
-  .cover-date { font-size: 14pt; letter-spacing: 0.08em; text-transform: uppercase; }
+  .cover-date {
+    color: var(--ink); font-size: 12pt; letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
   .cover-title { color: var(--accent); font-size: 24pt; font-weight: bold; margin: 2in 0; }
-  .cover-branding svg { height: 60px; }
+  .cover-branding { }
+  .cover-branding svg { height: 50px; width: auto; display: block; }
   .cover-infinity-logo {
     position: absolute;
-    right: 0.5in;
-    bottom: 0.5in;
+    right: 0in;
+    bottom: 0in;
     height: 100px;
-  }
-
-  /* Utility to remove h2 from inner markdown if it's already in title bar */
-  .inner-content h2 { display: none; }
-  .inner-content strong, .inner-content b { font-weight: bold; }
-
-  /* Chart slides: chart fills remaining content area below text/table */
-  .slide-has-chart .content-area .inner-content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-  }
-  .slide-has-chart .content-area .inner-content > img {
-    width: 100%;
-    flex: 1;
-    min-height: 0;
-    object-fit: contain;
-    object-position: top left;
   }
 </style>
 </head>
 <body>
 {% for section in sections %}
-<div class="slide slide-{{ section.slide_number }}{% if section.is_cover %} cover{% endif %}{% if section.chart_img %} slide-has-chart{% endif %}">
-  {% if section.is_cover %}
+<div class="slide{% if section.is_cover %} cover{% endif %}">
+  <div class="content">
+    {% if section.is_cover %}
     <div class="cover-stack">
       <div class="cover-date">{{ section.cover_date }}</div>
       <div class="cover-title">{{ section.cover_title }}</div>
@@ -171,18 +136,19 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
       {% endif %}
     </div>
     {% if section.infinity_logo_png %}
-    <img class="cover-infinity-logo" src="data:image/png;base64,{{ section.infinity_logo_png }}" />
+    <img class="cover-infinity-logo"
+         src="data:image/png;base64,{{ section.infinity_logo_png }}"
+         alt="Infinity logo"/>
     {% endif %}
-  {% else %}
+    {% else %}
+    {% if not section.is_chart_only %}
     <div class="title-bar">{{ section.title }}</div>
-    <div class="content-area">
-      <div class="inner-content">
-        {{ section.html_content }}
-        {% if section.chart_img %}
-        <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart" />
-        {% endif %}
-      </div>
-    </div>
+    {% endif %}
+    {{ section.html_content }}
+    {% endif %}
+  </div>
+  {% if section.chart_img %}
+  <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart"/>
   {% endif %}
 </div>
 {% endfor %}
@@ -290,8 +256,6 @@ async def assemble_report(
         # --- Build PPTX slide ---
         slide_layout = prs.slide_layouts[6]  # Blank layout
         slide = prs.slides.add_slide(slide_layout)
-        if spec.slide_number != 1:
-            add_title_bar(slide, spec.title)
 
         # Load chart image if this slide has one
         chart_filename = state.get(
@@ -301,19 +265,20 @@ async def assemble_report(
         if chart_filename and load_artifact_fn:
             chart_bytes = await load_artifact_fn(chart_filename)
 
-        roadmap_continuations = []
-        if spec.slide_type == SlideType.ROADMAP and load_artifact_fn:
-            for p in range(2, 15):
-                key = f"slide_{spec.slide_number:02d}_chart_image_{p}"
-                fn = state.get(key, "")
-                if fn:
-                    b = await load_artifact_fn(fn)
-                    if b:
-                        roadmap_continuations.append(b)
-                    else:
-                        break
-                else:
-                    break
+        # Load additional chart pages (for multi-page roadmaps)
+        extra_chart_bytes_list = []
+        page_num = 2
+        while True:
+            extra_key = f"slide_{spec.slide_number:02d}_chart_image_{page_num}"
+            extra_filename = state.get(extra_key, "")
+            if not extra_filename or not load_artifact_fn:
+                break
+            extra_bytes = await load_artifact_fn(extra_filename)
+            if extra_bytes:
+                extra_chart_bytes_list.append(extra_bytes)
+                page_num += 1
+            else:
+                break
 
         remaining = ""
         if spec.slide_number == 1:
@@ -354,20 +319,6 @@ async def assemble_report(
                 left=CONTENT_LEFT, top=Inches(5.8),
                 width=CONTENT_WIDTH, height=Inches(1.2),
             )
-        elif spec.slide_type == SlideType.ROADMAP and chart_bytes:
-            img_stream = io.BytesIO(chart_bytes)
-            slide.shapes.add_picture(
-                img_stream,
-                CONTENT_LEFT,
-                CONTENT_TOP,
-                CONTENT_WIDTH,
-                Inches(5.8),
-            )
-            remaining = render_markdown_to_textbox(
-                slide, content,
-                left=CONTENT_LEFT, top=Inches(6.2),
-                width=CONTENT_WIDTH, height=Inches(0.8),
-            )
         elif spec.slide_type == SlideType.MIXED and chart_bytes:
             remaining = render_markdown_to_textbox(
                 slide, pptx_content,
@@ -402,51 +353,31 @@ async def assemble_report(
             logo_shape.left = int(SLIDE_WIDTH - logo_shape.width - logo_margin)
             logo_shape.top = int(SLIDE_HEIGHT - logo_shape.height - logo_margin)
 
-        # FINAL TITLE FIX: Ensure title bar on all content slides is Pt 24 White
-        if spec.slide_number != 1:
-            for s in slide.shapes:
-                # Identification: wide rectangle at the very top
-                if s.top < Inches(0.1) and s.width > Inches(10) and hasattr(s, "text_frame"):
-                    for p in s.text_frame.paragraphs:
-                        p.font.size = Pt(24)
-                        p.font.color.rgb = WHITE
-                        p.font.bold = True
-
         # Create continuation slides for overflow content
         while remaining:
             cont_slide = prs.slides.add_slide(slide_layout)
             add_title_bar(cont_slide, spec.title + " (cont.)")
             remaining = render_markdown_to_textbox(cont_slide, remaining)
 
-        # Roadmap continuation pages (one PPTX slide per extra chart image)
-        for cont_bytes in roadmap_continuations:
+        # Create continuation slides for extra chart pages (multi-page roadmaps)
+        # Note: Chart image already contains "(cont. p2)" etc in its title, no title bar needed
+        for page_idx, extra_chart in enumerate(extra_chart_bytes_list, start=2):
             cont_slide = prs.slides.add_slide(slide_layout)
-            add_title_bar(cont_slide, spec.title + " (cont.)")
-            img_stream = io.BytesIO(cont_bytes)
+            # No title bar - chart fills the slide
+            img_stream = io.BytesIO(extra_chart)
             cont_slide.shapes.add_picture(
                 img_stream,
                 CONTENT_LEFT,
-                CONTENT_TOP,
+                Inches(0.5),  # Start near top since no title bar
                 CONTENT_WIDTH,
-                Inches(5.8),
+                SLIDE_HEIGHT - Inches(1.0),  # Fill most of slide height
             )
-            for s in cont_slide.shapes:
-                if s.top < Inches(0.1) and s.width > Inches(10) and hasattr(s, "text_frame"):
-                    for p in s.text_frame.paragraphs:
-                        p.font.size = Pt(24)
-                        p.font.color.rgb = WHITE
-                        p.font.bold = True
-                    break
 
         # --- Build PDF section ---
-        # Strip fenced wrappers (e.g. ```markdown ... ```) so inner content is rendered.
-        # Otherwise the whole response is output as a code block and tables stay raw.
-        raw_for_pdf = _strip_code_fences(content)
         html_content = md_lib.markdown(
-            raw_for_pdf,
+            content,
             extensions=["tables", "fenced_code"],
         )
-
         chart_img_b64 = None
         if chart_bytes:
             chart_img_b64 = base64.b64encode(chart_bytes).decode("utf-8")
@@ -457,24 +388,27 @@ async def assemble_report(
             cover_date, cover_title = _extract_cover_lines(content)
 
         pdf_sections.append({
-            "slide_number": spec.slide_number,
             "title": spec.title,
             "html_content": html_content,
             "chart_img": chart_img_b64,
             "is_cover": spec.slide_number == 1,
+            "is_chart_only": False,
             "cover_logo_svg": INFINITY_TEXT_LOGO_SVG if spec.slide_number == 1 else "",
             "infinity_logo_png": INFINITY_LOGO_PNG_B64 if spec.slide_number == 1 else "",
             "cover_date": cover_date,
             "cover_title": cover_title,
         })
-        # Roadmap continuation pages in PDF (one page per extra chart image)
-        for cont_bytes in roadmap_continuations:
+
+        # Add PDF sections for extra chart pages (multi-page roadmaps)
+        # Note: Chart image already contains "(cont. p2)" etc in its title
+        for page_idx, extra_chart in enumerate(extra_chart_bytes_list, start=2):
+            extra_chart_b64 = base64.b64encode(extra_chart).decode("utf-8")
             pdf_sections.append({
-                "slide_number": spec.slide_number,
-                "title": spec.title + " (cont.)",
-                "html_content": "",
-                "chart_img": base64.b64encode(cont_bytes).decode("utf-8"),
+                "title": "",  # No title bar needed
+                "html_content": "",  # Chart-only continuation page
+                "chart_img": extra_chart_b64,
                 "is_cover": False,
+                "is_chart_only": True,  # Skip title bar rendering
                 "cover_logo_svg": "",
                 "infinity_logo_png": "",
                 "cover_date": "",
