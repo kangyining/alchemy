@@ -206,8 +206,9 @@ class FinancialDataStore:
     def get_schema_context(self) -> str:
         """Return schema description for LLM context.
 
-        This is the minimal context needed for the LLM to write SQL queries.
-        Much smaller than the full data (~500 tokens vs 260k).
+        Includes column names, sample values for ALL columns, and the first
+        few rows of each table so the LLM can understand what generic column
+        names (col_8, col_9, ...) actually represent.
 
         Returns:
             Formatted string describing available tables and columns
@@ -216,7 +217,7 @@ class FinancialDataStore:
         if not tables:
             return "No financial data tables available."
 
-        # Also get sample values for better query generation
+        # Get sample values and first rows for each table
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("SELECT table_name, sample_values FROM table_metadata")
@@ -232,14 +233,28 @@ class FinancialDataStore:
             lines.append(f"- Rows: {t['row_count']}")
             lines.append(f"- Columns: {', '.join(cols)}")
 
-            # Show sample values for key columns (helps LLM understand data format)
+            # Show sample values for ALL columns so the LLM knows what
+            # generic names like col_8 actually contain (e.g. year values)
             if samples:
-                sample_strs = []
-                for col, vals in list(samples.items())[:5]:  # Limit to 5 columns
-                    sample_strs.append(f"  - {col}: {vals[:2]}")  # 2 samples per col
-                if sample_strs:
-                    lines.append("- Sample values:")
-                    lines.extend(sample_strs)
+                lines.append("- Sample values per column:")
+                for col, vals in samples.items():
+                    lines.append(f"  - {col}: {vals[:3]}")
+
+            # Show first 3 rows so the LLM can map column positions to meaning
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.execute(
+                        f'SELECT * FROM "{t["table_name"]}" LIMIT 3'
+                    )
+                    preview_rows = [dict(row) for row in cursor.fetchall()]
+                    if preview_rows:
+                        lines.append("- First rows:")
+                        for i, row in enumerate(preview_rows):
+                            lines.append(f"  Row {i}: {row}")
+            except Exception:
+                pass
+
             lines.append("")
 
         return "\n".join(lines)

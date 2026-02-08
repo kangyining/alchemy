@@ -116,9 +116,30 @@ def prepare_summary_context_request(
     """before_model_callback for TEXT-only slides (Cover, Exec Summary, Outlook).
 
     Injects a shorter summary context (first few sections per source, no tables)
-    to reduce token usage on slides that only need high-level information.
+    plus table schema metadata so the agent can use query_financial_data if needed.
     """
-    _inject_context(callback_context, llm_request, "summary_document_context")
+    strip_file_parts(callback_context, llm_request)
+
+    summary_text = callback_context.state.get("summary_document_context", "")
+    table_schemas = callback_context.state.get("table_schemas", "")
+
+    context_blocks = []
+    if summary_text:
+        context_blocks.append(summary_text)
+    if table_schemas:
+        context_blocks.append(
+            f"{table_schemas}\n\n"
+            "Financial data is loaded in SQLite. Use the "
+            "`query_financial_data` tool to retrieve specific numbers or metrics "
+            "when needed."
+        )
+
+    if context_blocks:
+        context_content = genai_types.Content(
+            role="user",
+            parts=[genai_types.Part.from_text(text="\n\n".join(context_blocks))],
+        )
+        llm_request.contents.insert(0, context_content)
 
 
 def log_token_usage(

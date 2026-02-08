@@ -86,9 +86,7 @@ def create_slide_agents() -> list[BaseAgent]:
                 delay_seconds=INTER_SLIDE_DELAY_SECONDS,
             ))
 
-        tools = [calculate_financial_metrics]
-        if spec.slide_type in (SlideType.TABLE, SlideType.CHART, SlideType.MIXED):
-            tools.append(query_financial_data)
+        tools = [calculate_financial_metrics, query_financial_data]
 
         if spec.slide_type in (SlideType.CHART, SlideType.MIXED):
             chart_type_str = CHART_TYPE_MAP.get(spec.chart_type)

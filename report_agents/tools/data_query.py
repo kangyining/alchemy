@@ -157,6 +157,11 @@ def query_financial_data(
     # Execute the query
     try:
         rows, columns = store.execute_query(sql)
+        agent_name = tool_context.agent_name
+        logger.info(
+            "QUERY_FINANCIAL_DATA | agent=%s | question='%s' | sql='%s' | rows=%d",
+            agent_name, query, sql, len(rows),
+        )
         return {
             "success": True,
             "data": rows,
