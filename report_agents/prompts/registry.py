@@ -92,7 +92,7 @@ SLIDE_REGISTRY: list[SlideSpec] = [
     ),
     SlideSpec(
         slide_number=4,
-        title="Roadmap Market Analysis",
+        title="Market Analysis",
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
