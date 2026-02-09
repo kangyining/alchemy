@@ -83,6 +83,7 @@ class IngestionAgent(BaseAgent):
         # 3. Store DataFrames in SQLite (0 tokens, pure pandas)
         session_id = ctx.session.id
         dataframes = result.get("dataframes", {})
+        unit_notes = result.get("unit_notes", {})
         table_schemas = ""
 
         if dataframes:
@@ -92,7 +93,8 @@ class IngestionAgent(BaseAgent):
                 parts = key.split(":", 1)
                 source_file = parts[0]
                 sheet_name = parts[1] if len(parts) > 1 else "Sheet1"
-                store.store_dataframe(df, source_file, sheet_name)
+                unit_note = unit_notes.get(key, "")
+                store.store_dataframe(df, source_file, sheet_name, unit_note=unit_note)
 
             # Get schema context for LLM (small, ~500 tokens)
             table_schemas = store.get_schema_context()

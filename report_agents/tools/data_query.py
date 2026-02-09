@@ -30,6 +30,7 @@ RULES:
 5. Use appropriate aggregations (SUM, AVG) when asked for totals or averages
 6. For period comparisons, look for columns like "Q1", "Q2", "2023", "2024", "Current", "Prior"
 7. Output ONLY the SQL query, no explanation or markdown
+8. IMPORTANT: Check for UNIT NOTE in the schema. If a table's values are expressed in thousands/millions/billions, apply the multiplier to dollar-amount columns in your SELECT (e.g., column_name * 1000) so results reflect actual dollar amounts. Do NOT multiply non-dollar columns like years, counts, or percentages.
 
 SCHEMA:
 {schema}

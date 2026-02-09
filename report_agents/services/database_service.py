@@ -48,6 +48,7 @@ class FinancialDataStore:
                     column_types TEXT NOT NULL,
                     row_count INTEGER NOT NULL,
                     sample_values TEXT,
+                    unit_note TEXT DEFAULT '',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -58,6 +59,7 @@ class FinancialDataStore:
         df: pd.DataFrame,
         source_file: str,
         sheet_name: str,
+        unit_note: str = "",
     ) -> str:
         """Store a pandas DataFrame as a SQLite table.
 
@@ -67,6 +69,8 @@ class FinancialDataStore:
             df: The DataFrame to store
             source_file: Original filename (e.g., "financials.xlsx")
             sheet_name: Sheet name within the file
+            unit_note: Unit qualifier detected from the sheet (e.g.,
+                "Values expressed in thousands (multiply by 1,000 for actual amounts)")
 
         Returns:
             The sanitized table name used in SQLite
@@ -89,8 +93,8 @@ class FinancialDataStore:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO table_metadata
-                (source_file, sheet_name, table_name, column_names, column_types, row_count, sample_values)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (source_file, sheet_name, table_name, column_names, column_types, row_count, sample_values, unit_note)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     source_file,
@@ -100,6 +104,7 @@ class FinancialDataStore:
                     json.dumps([str(dt) for dt in df.dtypes]),
                     len(df),
                     json.dumps(sample_values),
+                    unit_note,
                 ),
             )
             conn.commit()
@@ -217,21 +222,32 @@ class FinancialDataStore:
         if not tables:
             return "No financial data tables available."
 
-        # Get sample values and first rows for each table
+        # Get sample values, unit notes, and first rows for each table
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT table_name, sample_values FROM table_metadata")
-            samples_by_table = {row["table_name"]: row["sample_values"] for row in cursor}
+            cursor = conn.execute("SELECT table_name, sample_values, unit_note FROM table_metadata")
+            meta_by_table = {}
+            for row in cursor:
+                meta_by_table[row["table_name"]] = {
+                    "sample_values": row["sample_values"],
+                    "unit_note": row["unit_note"] or "",
+                }
 
         lines = ["## Available Financial Data Tables\n"]
         for t in tables:
             cols = json.loads(t["column_names"])
-            samples = json.loads(samples_by_table.get(t["table_name"], "{}"))
+            meta = meta_by_table.get(t["table_name"], {})
+            samples = json.loads(meta.get("sample_values", "{}"))
+            unit_note = meta.get("unit_note", "")
 
             lines.append(f"### Table: `{t['table_name']}`")
             lines.append(f"- Source: {t['source_file']} / {t['sheet_name']}")
             lines.append(f"- Rows: {t['row_count']}")
             lines.append(f"- Columns: {', '.join(cols)}")
+
+            # Surface unit note prominently so LLM applies multiplier in queries
+            if unit_note:
+                lines.append(f"- **UNIT NOTE: {unit_note}**")
 
             # Show sample values for ALL columns so the LLM knows what
             # generic names like col_8 actually contain (e.g. year values)

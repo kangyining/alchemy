@@ -201,6 +201,70 @@ def _collect_inline_files(
     return files
 
 
+# ---------------------------------------------------------------------------
+# Unit multiplier detection for financial spreadsheets
+# ---------------------------------------------------------------------------
+# Financial Excel files often express dollar values with a unit qualifier
+# (e.g., "($ in thousands)") in sheet names, column headers, or early rows.
+# We detect these per-sheet and surface them as metadata so downstream LLM
+# agents can apply the correct multiplier in SQL queries.
+_UNIT_PATTERNS: list[tuple[re.Pattern, int, str]] = [
+    (re.compile(r"in\s+thousands", re.IGNORECASE), 1_000, "thousands"),
+    (re.compile(r"in\s+millions", re.IGNORECASE), 1_000_000, "millions"),
+    (re.compile(r"in\s+billions", re.IGNORECASE), 1_000_000_000, "billions"),
+]
+
+# Number of initial rows to scan for unit qualifiers
+_UNIT_SCAN_ROWS = 10
+
+
+def _detect_unit_multiplier(
+    sheet_name: str, df: pd.DataFrame,
+) -> dict:
+    """Detect unit multiplier from sheet name, column headers, and first rows.
+
+    Scans per-sheet (each sheet in a workbook can have different units).
+
+    Returns:
+        Dict with keys: multiplier (int), unit_label (str), note (str).
+        If no unit qualifier is detected, multiplier=1 and note="".
+    """
+
+    def _match(text: str) -> dict | None:
+        for pattern, multiplier, label in _UNIT_PATTERNS:
+            if pattern.search(text):
+                return {
+                    "multiplier": multiplier,
+                    "unit_label": label,
+                    "note": f"Values expressed in {label} (multiply by {multiplier:,} for actual amounts)",
+                }
+        return None
+
+    # 1. Check sheet name
+    result = _match(sheet_name)
+    if result:
+        return result
+
+    # 2. Check column headers
+    for col in df.columns:
+        col_str = str(col)
+        result = _match(col_str)
+        if result:
+            return result
+
+    # 3. Check first N rows (cell values converted to string)
+    scan_rows = df.head(_UNIT_SCAN_ROWS)
+    for _, row in scan_rows.iterrows():
+        for cell in row:
+            cell_str = str(cell).strip()
+            if cell_str and cell_str.lower() not in ("", "nan", "none", "nat"):
+                result = _match(cell_str)
+                if result:
+                    return result
+
+    return {"multiplier": 1, "unit_label": "", "note": ""}
+
+
 # MIME types that should be parsed natively (not sent to Document AI)
 _SPREADSHEET_MIME_TYPES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
@@ -214,13 +278,14 @@ _MAX_ROWS_PER_SHEET = 1500
 
 def _parse_spreadsheet(
     name: str, file_bytes: bytes, mime_type: str,
-) -> tuple[list[dict], list[dict], dict[str, pd.DataFrame]]:
+) -> tuple[list[dict], list[dict], dict[str, pd.DataFrame], dict[str, str]]:
     """Parse Excel/CSV files natively using pandas.
 
-    Returns (text_sections, tables, dataframes) where:
+    Returns (text_sections, tables, dataframes, unit_notes) where:
     - text_sections: CSV text for context injection (legacy)
     - tables: Structured table entries (legacy)
-    - dataframes: Raw DataFrames for SQLite storage (NEW)
+    - dataframes: Raw DataFrames for SQLite storage
+    - unit_notes: Per-sheet unit notes (keyed by same source:sheet key as dataframes)
 
     Optimizations applied to the context-only copy (SQLite stores full data):
     - Floats rounded to 2 decimal places (standard financial precision)
@@ -235,6 +300,7 @@ def _parse_spreadsheet(
     text_sections: list[dict] = []
     tables: list[dict] = []
     dataframes: dict[str, pd.DataFrame] = {}
+    unit_notes: dict[str, str] = {}
 
     try:
         if mime_type == "text/csv":
@@ -248,6 +314,14 @@ def _parse_spreadsheet(
         for sheet_name, df in sheets.items():
             if df.empty:
                 continue
+
+            # Detect unit multiplier (e.g., "$ in thousands") before sanitization
+            unit_info = _detect_unit_multiplier(sheet_name, df)
+            if unit_info["note"]:
+                logger.info(
+                    "Detected unit multiplier for %s/%s: %s",
+                    name, sheet_name, unit_info["note"],
+                )
 
             # Store full, untruncated data in SQLite (minimal header cleanup only)
             df_sql = df.copy()
@@ -300,6 +374,8 @@ def _parse_spreadsheet(
 
             # Store full DataFrame for SQLite (minimal header cleanup only)
             dataframes[sheet_name] = df_sql.copy()
+            if unit_info["note"]:
+                unit_notes[sheet_name] = unit_info["note"]
 
             # Build CSV table for text context (more compact than markdown)
             csv_content = f"[Sheet: {sheet_name}]\n"
@@ -333,7 +409,7 @@ def _parse_spreadsheet(
     except Exception as e:
         logger.error("Failed to parse spreadsheet %s: %s", name, e)
 
-    return text_sections, tables, dataframes
+    return text_sections, tables, dataframes, unit_notes
 
 
 def _split_pdf(
@@ -484,16 +560,20 @@ async def parse_documents(
     all_text_sections: list[dict] = []
     all_tables: list[dict] = []
     all_dataframes: dict[str, pd.DataFrame] = {}  # source_file:sheet_name -> DataFrame
+    all_unit_notes: dict[str, str] = {}  # source_file:sheet_name -> unit note
     errors: list[dict] = []
 
     # 2a. Parse spreadsheets natively (no Document AI cost, full sheet support)
     for name, file_bytes, mime_type in spreadsheet_files:
-        text_sections, tables, dataframes = _parse_spreadsheet(name, file_bytes, mime_type)
+        text_sections, tables, dataframes, unit_notes = _parse_spreadsheet(name, file_bytes, mime_type)
         all_text_sections.extend(text_sections)
         all_tables.extend(tables)
-        # Store dataframes with composite key (source:sheet)
+        # Store dataframes and unit notes with composite key (source:sheet)
         for sheet_name, df in dataframes.items():
-            all_dataframes[f"{name}:{sheet_name}"] = df
+            key = f"{name}:{sheet_name}"
+            all_dataframes[key] = df
+            if sheet_name in unit_notes:
+                all_unit_notes[key] = unit_notes[sheet_name]
 
     # 2b. Process remaining files via Document AI
     if docai_files:
@@ -564,7 +644,8 @@ async def parse_documents(
         "full_text_document_context": full_text_document_context,
         "summary_document_context": summary_document_context,
         "parsed_tables_json": json.dumps(all_tables, default=str),
-        "dataframes": all_dataframes,  # NEW: raw DataFrames for SQLite storage
+        "dataframes": all_dataframes,  # raw DataFrames for SQLite storage
+        "unit_notes": all_unit_notes,  # per-sheet unit notes (e.g., "Values expressed in thousands")
         "documents_parsed": len(files) - len(errors),
         "text_sections": len(all_text_sections),
         "tables_found": len(all_tables),
