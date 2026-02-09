@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -199,6 +200,19 @@ def _extract_cover_lines(md_text: str) -> tuple[str, str]:
     return date_line, title_line
 
 
+def _strip_bold_from_sources(md_text):
+    """Remove **bold** markers from the Sources section so citations stay plain."""
+    pattern = re.compile(r'^(#+\s*sources\b)', re.IGNORECASE | re.MULTILINE)
+    match = pattern.search(md_text)
+    if not match:
+        return md_text
+    before = md_text[:match.start()]
+    sources_block = md_text[match.start():]
+    sources_block = re.sub(r'\*\*([^*]+)\*\*', r'\1', sources_block)
+    sources_block = re.sub(r'__([^_]+)__', r'\1', sources_block)
+    return before + sources_block
+
+
 def _svg_to_png_bytes(svg: str, height_px: int = 50) -> bytes | None:
     """Convert an SVG string to PNG bytes for PPTX rendering."""
     try:
@@ -239,6 +253,7 @@ async def assemble_report(
         content = state.get(slide_content_key(spec.slide_number), "")
         if not content:
             continue
+        content = _strip_bold_from_sources(content)
         if spec.slide_number == 1:
             content = _inject_cover_date(content)
         pptx_content = content
