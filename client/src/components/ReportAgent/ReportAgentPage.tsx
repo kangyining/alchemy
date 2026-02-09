@@ -504,138 +504,238 @@ export default function ReportAgentPage() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col overflow-auto p-4 md:p-6">
-      <div className="mx-auto w-full max-w-2xl space-y-6">
-        <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
-          Financial Report Generation
-        </h1>
-        <p className="text-base text-gray-600 dark:text-gray-400">
-          Please upload all required documents for the financial report (supported formats: PDF, DOCX, XLSX, CSV). 
-          The final report will be generated in PDF format.
-        </p>
-
-        <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-          <label className="block text-base font-medium text-gray-700 dark:text-gray-300">
-            Files
-          </label>
-          <input
-            type="file"
-            multiple
-            accept=".pdf,.docx,.xlsx,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv"
-            onChange={handleFileChange}
-            disabled={running}
-            className="block w-full text-base text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-4 file:py-2 file:text-base file:font-medium file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300"
-          />
-          {files.length > 0 && (
-            <p className="text-base text-gray-600 dark:text-gray-400">
-              {files.length} file(s) selected: {files.map((f) => f.name).join(', ')}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={runReport}
-            disabled={running}
-            title={files.length === 0 ? 'Select at least one file first' : undefined}
-            className="rounded-md bg-[#A89968] px-4 py-2 text-base font-medium text-white hover:bg-[#958b5e] disabled:opacity-50 dark:bg-[#A89968] dark:hover:bg-[#958b5e]"
-          >
-            {running ? 'Running…' : 'Generate report'}
-          </button>
-          {streamStatus !== 'idle' && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Stream status: {streamStatus}
-            </p>
-          )}
+    <div className="flex h-full flex-col overflow-auto bg-gradient-to-b from-gray-50 to-white p-6 md:p-10 dark:from-gray-900 dark:to-gray-950">
+      <div className="mx-auto w-full max-w-2xl space-y-8">
+        {/* Header */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#A89968]/10 dark:bg-[#A89968]/20">
+              <svg className="h-5 w-5 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
+              Financial Report Generation
+            </h1>
+          </div>
+          <p className="text-base leading-relaxed text-gray-500 dark:text-gray-400">
+            Upload your documents and we'll generate a comprehensive financial report in PDF format.
+          </p>
         </div>
 
+        {/* Upload Card */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700/80 dark:bg-gray-800/80">
+          <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-gray-700/50 dark:bg-gray-800/50">
+            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Upload Documents</h2>
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Supported: PDF, DOCX, XLSX, CSV</p>
+          </div>
+          <div className="space-y-4 p-6">
+            <label
+              className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 transition-colors ${
+                running
+                  ? 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800'
+                  : 'border-gray-300 bg-gray-50/50 hover:border-[#A89968]/50 hover:bg-[#A89968]/5 dark:border-gray-600 dark:bg-gray-800/50 dark:hover:border-[#A89968]/40 dark:hover:bg-[#A89968]/5'
+              }`}
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#A89968]/10 dark:bg-[#A89968]/20">
+                <svg className="h-6 w-6 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <span className="text-base font-medium text-gray-700 dark:text-gray-300">
+                  {files.length > 0 ? `${files.length} file(s) selected` : 'Click to browse files'}
+                </span>
+                {files.length > 0 && (
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {files.map((f) => f.name).join(', ')}
+                  </p>
+                )}
+              </div>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.docx,.xlsx,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv"
+                onChange={handleFileChange}
+                disabled={running}
+                className="hidden"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={runReport}
+              disabled={running}
+              title={files.length === 0 ? 'Select at least one file first' : undefined}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#A89968] px-5 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-[#958b5e] hover:shadow-md disabled:opacity-50 dark:bg-[#A89968] dark:hover:bg-[#958b5e]"
+            >
+              {running ? (
+                <>
+                  <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Generating Report...
+                </>
+              ) : (
+                <>
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                  </svg>
+                  Generate Report
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Error */}
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-            {error}
+          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 dark:border-red-800/50 dark:bg-red-900/20">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40">
+              <svg className="h-4 w-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-base font-medium text-red-800 dark:text-red-300">{error}</p>
+              {!running && files.length > 0 && (
+                <button
+                  type="button"
+                  onClick={runReport}
+                  className="mt-3 rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
           </div>
-        )}
-        {streamWarning && !error && (
-          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-base text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-            {streamWarning}
-          </div>
-        )}
-        {error && !running && files.length > 0 && (
-          <button
-            type="button"
-            onClick={runReport}
-            className="w-fit rounded-md bg-gray-900 px-4 py-2 text-base font-medium text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
-          >
-            Retry
-          </button>
         )}
 
+        {/* Warning */}
+        {streamWarning && !error && (
+          <div className="flex items-start gap-3 rounded-2xl border border-yellow-200 bg-yellow-50 p-5 dark:border-yellow-800/50 dark:bg-yellow-900/20">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/40">
+              <svg className="h-4 w-4 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+            </div>
+            <p className="text-base text-yellow-800 dark:text-yellow-300">{streamWarning}</p>
+          </div>
+        )}
+
+        {/* Progress & Steps */}
         {(running || streamStatus !== 'idle' || steps.length > 0) && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="mb-3 text-base font-medium text-gray-700 dark:text-gray-300">Steps</h2>
-            <div className="mb-4 space-y-1 text-base text-gray-600 dark:text-gray-400">
+          <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-gray-700/80 dark:bg-gray-800/80">
+            <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-gray-700/50 dark:bg-gray-800/50">
               <div className="flex items-center justify-between">
-                <span>
-                  Current:{' '}
-                  <span className="font-medium text-gray-800 dark:text-gray-200">
-                    {currentStep?.label ?? (running ? 'Waiting for first event…' : '—')}
-                  </span>
-                </span>
+                <div className="flex items-center gap-2">
+                  {running && (
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#A89968] opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#A89968]" />
+                    </span>
+                  )}
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Progress</h2>
+                </div>
                 {progress.total ? (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="rounded-full bg-[#A89968]/10 px-3 py-1 text-sm font-medium text-[#A89968] dark:bg-[#A89968]/20">
                     {progress.current ?? 0} / {progress.total} slides
                   </span>
                 ) : progress.current ? (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="rounded-full bg-[#A89968]/10 px-3 py-1 text-sm font-medium text-[#A89968] dark:bg-[#A89968]/20">
                     Slide {progress.current}
                   </span>
                 ) : null}
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
-                {progressPercent != null ? (
-                  <div
-                    className="h-full rounded-full bg-[#A89968] transition-all duration-300"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                ) : running ? (
-                  <div className="h-full w-full animate-pulse rounded-full bg-[#A89968]/60" />
-                ) : null}
-              </div>
-            {currentStep?.summary && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">{currentStep.summary}</p>
-            )}
             </div>
-            {visibleSteps.length > 0 && (
-              <ul className="space-y-2">
-                {visibleSteps.map((s, i) => (
-                  <li key={i} className="text-base text-gray-600 dark:text-gray-400">
-                    <span className="font-medium text-gray-800 dark:text-gray-200">{s.label}</span>
-                    {s.summary ? ` — ${s.summary}${s.truncated ? '…' : ''}` : ''}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="p-6">
+              {/* Current step */}
+              <div className="mb-4 space-y-3">
+                <div className="flex items-center gap-2 text-base">
+                  <span className="text-gray-500 dark:text-gray-400">Current:</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">
+                    {currentStep?.label ?? (running ? 'Initializing...' : '—')}
+                  </span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+                  {progressPercent != null ? (
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#A89968] to-[#C4B682] transition-all duration-500 ease-out"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  ) : running ? (
+                    <div className="h-full w-full overflow-hidden rounded-full">
+                      <div className="h-full w-full animate-pulse bg-gradient-to-r from-[#A89968]/40 via-[#A89968]/70 to-[#A89968]/40" />
+                    </div>
+                  ) : null}
+                </div>
+                {currentStep?.summary && (
+                  <p className="text-sm italic text-gray-500 dark:text-gray-400">{currentStep.summary}</p>
+                )}
+              </div>
+              {/* Steps timeline */}
+              {visibleSteps.length > 0 && (
+                <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700/50">
+                  <ul className="space-y-3">
+                    {visibleSteps.map((s, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className="mt-1.5 flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                          <div className={`h-2 w-2 rounded-full ${
+                            i === visibleSteps.length - 1 && running
+                              ? 'animate-pulse bg-[#A89968]'
+                              : 'bg-[#A89968]/40'
+                          }`} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-base font-medium text-gray-800 dark:text-gray-200">{s.label}</span>
+                          {s.summary && (
+                            <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">
+                              {s.summary}{s.truncated ? '...' : ''}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
+        {/* Download */}
         {artifacts.pdfVersion != null && sessionId && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="mb-3 text-base font-medium text-gray-700 dark:text-gray-300">Download Report</h2>
-            <div className="flex gap-4">
-              {artifacts.pdfVersion != null && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadArtifact(
-                      'financial_report.pdf',
-                      artifacts.pdfVersion as number,
-                      'financial_report.pdf',
-                      'pdf',
-                    )
-                  }
-                  disabled={downloading.pdf}
-                  className="rounded-md bg-[#A89968] px-4 py-2 text-base font-medium text-white hover:bg-[#958b5e] disabled:opacity-50 dark:bg-[#A89968] dark:hover:bg-[#958b5e]"
-                >
-                  {downloading.pdf ? 'Downloading…' : 'Download PDF'}
-                </button>
-              )}
+          <div className="overflow-hidden rounded-2xl border border-[#A89968]/30 bg-gradient-to-r from-[#A89968]/5 to-[#C4B682]/5 shadow-sm dark:border-[#A89968]/20 dark:from-[#A89968]/10 dark:to-[#C4B682]/10">
+            <div className="flex items-center justify-between p-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#A89968]/15 dark:bg-[#A89968]/25">
+                  <svg className="h-6 w-6 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Report Ready</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Your financial report has been generated</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  downloadArtifact(
+                    'financial_report.pdf',
+                    artifacts.pdfVersion as number,
+                    'financial_report.pdf',
+                    'pdf',
+                  )
+                }
+                disabled={downloading.pdf}
+                className="flex items-center gap-2 rounded-xl bg-[#A89968] px-6 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-[#958b5e] hover:shadow-md disabled:opacity-50 dark:bg-[#A89968] dark:hover:bg-[#958b5e]"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                {downloading.pdf ? 'Downloading...' : 'Download PDF'}
+              </button>
             </div>
           </div>
         )}
