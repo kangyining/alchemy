@@ -684,7 +684,7 @@ def _build_full_document_context(
 
 
 # Maximum text sections per source file to include in the summary context.
-_SUMMARY_MAX_SECTIONS_PER_SOURCE = 3
+_SUMMARY_MAX_SECTIONS_PER_SOURCE = 10
 
 
 def _build_summary_document_context(text_sections: list[dict]) -> str:

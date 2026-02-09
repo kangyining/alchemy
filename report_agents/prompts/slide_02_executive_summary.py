@@ -18,7 +18,17 @@ Extract and present:
 
 Context: The audience is the Investment Committee of a pension fund. They prioritize capital preservation, long-term risk-adjusted returns, and clear strategic alignment. They need facts, not marketing fluff.
 
-Output Structure: Please analyze the provided documents and generate a summary using the following specific sections and formatting guidelines. Do not include information from outside the provided documents unless explicitly requested to benchmark against market data.
+Output Structure: Please analyze the provided documents and generate a summary using the following specific sections and formatting guidelines.
+
+**MANDATORY HEADER:**
+You must start your response with an Investment Memo header as follows:
+**To:** Investment Committee
+**From:** Senior Investment Analyst
+**Date:** [DATE]
+**Subject:** Series B Equity Investment – Wahed Inc.
+
+**SECTIONING RULE:**
+Use `###` for all section headers (e.g., `### 1. Executive Summary & The Ask`) to ensure professional gray-bar styling.
 
 1. Executive Summary & The Ask
 The Ask: Clearly state the investment amount, instrument type (e.g., Equity, Debt, Fund Commitment), and the specific approval being requested.

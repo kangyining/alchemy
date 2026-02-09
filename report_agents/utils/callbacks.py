@@ -92,11 +92,11 @@ def prepare_full_context_request(
             "- 'Show all data from the Income Statement sheet'\n"
             "- 'Get revenue by segment and year'"
         )
-        # Only pass a trimmed note that document text exists for qualitative context
+        # Only pass a trimmed note that document text exists for qualitative and fallback context
         if text_context:
             context_blocks.append(
-                "--- DOCUMENT TEXT (use for qualitative/narrative context only, "
-                "NOT for numbers or financial figures) ---\n\n" + text_context
+                "--- DOCUMENT TEXT (use for qualitative context and as a FALLBACK for numbers "
+                "ONLY when the SQL database above is missing the specific data point) ---\n\n" + text_context
             )
     elif text_context:
         # No SQL data at all — fall back to full PDF text as before
