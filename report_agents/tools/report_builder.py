@@ -320,6 +320,16 @@ async def assemble_report(
             title_tf.paragraphs[0].font.bold = True
             title_tf.paragraphs[0].font.color.rgb = ACCENT_COLOR
             title_tf.paragraphs[0].font.name = "Arial"
+        elif spec.slide_type == SlideType.ROADMAP and chart_bytes:
+            # Roadmap slides only show the timeline chart image — skip text/table
+            img_stream = io.BytesIO(chart_bytes)
+            slide.shapes.add_picture(
+                img_stream,
+                CONTENT_LEFT,
+                CONTENT_TOP,
+                CONTENT_WIDTH,
+                CONTENT_HEIGHT,
+            )
         elif spec.slide_type == SlideType.CHART and chart_bytes:
             img_stream = io.BytesIO(chart_bytes)
             slide.shapes.add_picture(
@@ -389,10 +399,14 @@ async def assemble_report(
             )
 
         # --- Build PDF section ---
-        html_content = md_lib.markdown(
-            content,
-            extensions=["tables", "fenced_code"],
-        )
+        # Roadmap slides only show the chart image, no text/table
+        if spec.slide_type == SlideType.ROADMAP and chart_bytes:
+            html_content = ""
+        else:
+            html_content = md_lib.markdown(
+                content,
+                extensions=["tables", "fenced_code"],
+            )
         chart_img_b64 = None
         if chart_bytes:
             chart_img_b64 = base64.b64encode(chart_bytes).decode("utf-8")
