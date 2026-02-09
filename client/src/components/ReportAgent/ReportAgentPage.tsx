@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 const APP_NAME = 'report_agents';
 const USER_ID = 'web-user';
@@ -213,6 +213,16 @@ export default function ReportAgentPage() {
   const pendingStepsRef = useRef<Step[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStreamedRef = useRef(false);
+
+  // Warn user before leaving while report is generating
+  useEffect(() => {
+    if (!running) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [running]);
 
   const apiBase = getReportAgentApiBase();
   const visibleSteps = steps.filter((step) => !step.isThrottle);
@@ -642,6 +652,18 @@ export default function ReportAgentPage() {
             </button>
           </div>
         </div>
+
+        {/* Stay on page warning */}
+        {running && (
+          <div className="flex items-center gap-3 rounded-2xl border border-[#A89968]/30 bg-[#A89968]/5 px-5 py-3 dark:border-[#A89968]/20 dark:bg-[#A89968]/10">
+            <svg className="h-5 w-5 flex-shrink-0 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+            <p className="text-sm font-medium text-[#958b5e] dark:text-[#C4B682]">
+              Your report is being generated. Please keep this page open until it's finished. You can continue working in other tabs or open another Elixir window.
+            </p>
+          </div>
+        )}
 
         {/* Error */}
         {error && (

@@ -78,6 +78,35 @@ const startServer = async () => {
 
   app.get('/health', (_req, res) => res.status(200).send('OK'));
 
+  /* Proxy /report-agent-api to the report agent ADK — placed before body parsers so raw body streams through */
+  const http = require('http');
+  const reportAgentTarget = process.env.REPORT_AGENT_URL || 'http://host.docker.internal:8000';
+  app.use('/report-agent-api', (req, res) => {
+    const parsed = new URL(reportAgentTarget);
+    const targetPath = req.originalUrl.replace(/^\/report-agent-api/, '') || '/';
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || 80,
+      path: targetPath,
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: parsed.host,
+      },
+    };
+    const proxyReq = http.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res, { end: true });
+    });
+    proxyReq.on('error', (err) => {
+      logger.error('[report-agent-proxy] Error:', err.message);
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Report agent unavailable', detail: err.message });
+      }
+    });
+    req.pipe(proxyReq, { end: true });
+  });
+
   /* Middleware */
   app.use(noIndex);
   app.use(express.json({ limit: '3mb' }));
