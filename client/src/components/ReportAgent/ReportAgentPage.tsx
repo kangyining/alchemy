@@ -206,14 +206,12 @@ export default function ReportAgentPage() {
     pptx: false,
     pdf: false,
   });
-  const [hideThrottle, setHideThrottle] = useState(true);
-
   const pendingStepsRef = useRef<Step[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStreamedRef = useRef(false);
 
   const apiBase = getReportAgentApiBase();
-  const visibleSteps = hideThrottle ? steps.filter((step) => !step.isThrottle) : steps;
+  const visibleSteps = steps.filter((step) => !step.isThrottle);
   const progressPercent =
     progress.total && progress.current
       ? Math.min(100, Math.max(0, (progress.current / progress.total) * 100))
@@ -504,16 +502,16 @@ export default function ReportAgentPage() {
   return (
     <div className="flex h-full flex-col overflow-auto p-4 md:p-6">
       <div className="mx-auto w-full max-w-2xl space-y-6">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+        <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
           Financial Report Generation
         </h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Upload PDF, DOCX, XLSX, or CSV files and generate a report. Steps stream below; when
-          done, download the PPTX and PDF.
+        <p className="text-base text-gray-600 dark:text-gray-400">
+          Please upload all required documents for the financial report (supported formats: PDF, DOCX, XLSX, CSV). 
+          The final report will be generated in PDF format.
         </p>
 
         <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className="block text-base font-medium text-gray-700 dark:text-gray-300">
             Files
           </label>
           <input
@@ -522,10 +520,10 @@ export default function ReportAgentPage() {
             accept=".pdf,.docx,.xlsx,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv"
             onChange={handleFileChange}
             disabled={running}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300"
+            className="block w-full text-base text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-4 file:py-2 file:text-base file:font-medium file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300"
           />
           {files.length > 0 && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-base text-gray-600 dark:text-gray-400">
               {files.length} file(s) selected: {files.map((f) => f.name).join(', ')}
             </p>
           )}
@@ -534,24 +532,24 @@ export default function ReportAgentPage() {
             onClick={runReport}
             disabled={running}
             title={files.length === 0 ? 'Select at least one file first' : undefined}
-            className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-700 dark:hover:bg-green-800"
+            className="rounded-md bg-[#A89968] px-4 py-2 text-base font-medium text-white hover:bg-[#958b5e] disabled:opacity-50 dark:bg-[#A89968] dark:hover:bg-[#958b5e]"
           >
             {running ? 'Running…' : 'Generate report'}
           </button>
           {streamStatus !== 'idle' && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Stream status: {streamStatus}
             </p>
           )}
         </div>
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
             {error}
           </div>
         )}
         {streamWarning && !error && (
-          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-base text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
             {streamWarning}
           </div>
         )}
@@ -559,7 +557,7 @@ export default function ReportAgentPage() {
           <button
             type="button"
             onClick={runReport}
-            className="w-fit rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
+            className="w-fit rounded-md bg-gray-900 px-4 py-2 text-base font-medium text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
           >
             Retry
           </button>
@@ -567,19 +565,8 @@ export default function ReportAgentPage() {
 
         {(running || streamStatus !== 'idle' || steps.length > 0) && (
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300">Steps</h2>
-              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500"
-                  checked={hideThrottle}
-                  onChange={(e) => setHideThrottle(e.target.checked)}
-                />
-                Hide throttle steps
-              </label>
-            </div>
-            <div className="mb-4 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+            <h2 className="mb-3 text-base font-medium text-gray-700 dark:text-gray-300">Steps</h2>
+            <div className="mb-4 space-y-1 text-base text-gray-600 dark:text-gray-400">
               <div className="flex items-center justify-between">
                 <span>
                   Current:{' '}
@@ -588,11 +575,11 @@ export default function ReportAgentPage() {
                   </span>
                 </span>
                 {progress.total ? (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
                     {progress.current ?? 0} / {progress.total} slides
                   </span>
                 ) : progress.current ? (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
                     Slide {progress.current}
                   </span>
                 ) : null}
@@ -600,53 +587,36 @@ export default function ReportAgentPage() {
               <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
                 {progressPercent != null ? (
                   <div
-                    className="h-full rounded-full bg-green-600 transition-all duration-300"
+                    className="h-full rounded-full bg-[#A89968] transition-all duration-300"
                     style={{ width: `${progressPercent}%` }}
                   />
                 ) : running ? (
-                  <div className="h-full w-full animate-pulse rounded-full bg-green-600/60" />
+                  <div className="h-full w-full animate-pulse rounded-full bg-[#A89968]/60" />
                 ) : null}
               </div>
             {currentStep?.summary && (
-              <p className="text-xs text-gray-500 dark:text-gray-400">{currentStep.summary}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{currentStep.summary}</p>
             )}
             </div>
             {visibleSteps.length > 0 ? (
               <ul className="space-y-2">
                 {visibleSteps.map((s, i) => (
-                  <li key={i} className="text-sm text-gray-600 dark:text-gray-400">
+                  <li key={i} className="text-base text-gray-600 dark:text-gray-400">
                     <span className="font-medium text-gray-800 dark:text-gray-200">{s.label}</span>
                     {s.summary ? ` — ${s.summary}${s.truncated ? '…' : ''}` : ''}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">No steps yet.</p>
+              <p className="text-base text-gray-500 dark:text-gray-400">No steps yet.</p>
             )}
           </div>
         )}
 
-        {(artifacts.pptxVersion != null || artifacts.pdfVersion != null) && sessionId && (
+        {artifacts.pdfVersion != null && sessionId && (
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">Download</h2>
+            <h2 className="mb-3 text-base font-medium text-gray-700 dark:text-gray-300">Download</h2>
             <div className="flex gap-4">
-              {artifacts.pptxVersion != null && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadArtifact(
-                      'financial_report.pptx',
-                      artifacts.pptxVersion as number,
-                      'financial_report.pptx',
-                      'pptx',
-                    )
-                  }
-                  disabled={downloading.pptx}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-800"
-                >
-                  {downloading.pptx ? 'Downloading…' : 'Download PPTX'}
-                </button>
-              )}
               {artifacts.pdfVersion != null && (
                 <button
                   type="button"
@@ -659,7 +629,7 @@ export default function ReportAgentPage() {
                     )
                   }
                   disabled={downloading.pdf}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-800"
+                  className="rounded-md bg-[#A89968] px-4 py-2 text-base font-medium text-white hover:bg-[#958b5e] disabled:opacity-50 dark:bg-[#A89968] dark:hover:bg-[#958b5e]"
                 >
                   {downloading.pdf ? 'Downloading…' : 'Download PDF'}
                 </button>
