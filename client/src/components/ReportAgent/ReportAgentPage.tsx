@@ -142,15 +142,19 @@ function coerceVersion(value: unknown): number | null {
 
 function getAuthorMeta(author: string): { label: string; isThrottle: boolean; slideNumber?: number } {
   if (!author) return { label: 'Unknown', isThrottle: false };
-  if (author === 'IngestionAgent') return { label: 'Parsing documents', isThrottle: false };
-  if (author === 'ReportAssemblyAgent') return { label: 'Assembling report', isThrottle: false };
+  if (author === 'IngestionAgent') return { label: 'Parsing Documents', isThrottle: false };
+  if (author === 'ReportAssemblyAgent') return { label: 'Assembling Report', isThrottle: false };
   if (author.startsWith('Throttle_') || author.startsWith('Throttle')) {
     return { label: 'Waiting', isThrottle: true };
   }
-  const slideMatch = author.match(/SlideAgent_(\d+)/);
+  // ADK format: SlideAgent_{slide_number:02d}_{safe_title} (safe_title may use underscores for spaces)
+  const slideMatch = author.match(/^SlideAgent_(\d+)_?(.*)$/);
   if (slideMatch?.[1]) {
     const num = Number.parseInt(slideMatch[1], 10);
-    if (Number.isFinite(num)) return { label: `Slide ${num}`, isThrottle: false, slideNumber: num };
+    if (!Number.isFinite(num)) return { label: author, isThrottle: false };
+    const safeTitle = slideMatch[2]?.trim().replace(/_/g, ' ');
+    const label = safeTitle ? `Slide ${num}: ${safeTitle}` : `Slide ${num}`;
+    return { label, isThrottle: false, slideNumber: num };
   }
   return { label: author, isThrottle: false };
 }
@@ -598,7 +602,7 @@ export default function ReportAgentPage() {
               <p className="text-sm text-gray-500 dark:text-gray-400">{currentStep.summary}</p>
             )}
             </div>
-            {visibleSteps.length > 0 ? (
+            {visibleSteps.length > 0 && (
               <ul className="space-y-2">
                 {visibleSteps.map((s, i) => (
                   <li key={i} className="text-base text-gray-600 dark:text-gray-400">
@@ -607,15 +611,13 @@ export default function ReportAgentPage() {
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="text-base text-gray-500 dark:text-gray-400">No steps yet.</p>
             )}
           </div>
         )}
 
         {artifacts.pdfVersion != null && sessionId && (
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="mb-3 text-base font-medium text-gray-700 dark:text-gray-300">Download</h2>
+            <h2 className="mb-3 text-base font-medium text-gray-700 dark:text-gray-300">Download Report</h2>
             <div className="flex gap-4">
               {artifacts.pdfVersion != null && (
                 <button
