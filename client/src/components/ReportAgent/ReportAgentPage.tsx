@@ -498,9 +498,20 @@ export default function ReportAgentPage() {
   }, [files, apiBase, enqueueStep, flushPendingSteps]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const list = e.target.files ? Array.from(e.target.files) : [];
-    setFiles(list);
+    const newFiles = e.target.files ? Array.from(e.target.files) : [];
+    if (newFiles.length === 0) return;
+    setFiles((prev) => {
+      const existingNames = new Set(prev.map((f) => f.name));
+      const unique = newFiles.filter((f) => !existingNames.has(f.name));
+      return [...prev, ...unique];
+    });
     setError(null);
+    // Reset the input so re-selecting the same file triggers onChange
+    e.target.value = '';
+  }, []);
+
+  const removeFile = useCallback((name: string) => {
+    setFiles((prev) => prev.filter((f) => f.name !== name));
   }, []);
 
   return (
@@ -544,11 +555,11 @@ export default function ReportAgentPage() {
               </div>
               <div className="text-center">
                 <span className="text-base font-medium text-gray-700 dark:text-gray-300">
-                  {files.length > 0 ? `${files.length} file(s) selected` : 'Click to browse files'}
+                  {files.length > 0 ? 'Click to add more files' : 'Click to browse files'}
                 </span>
-                {files.length > 0 && (
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {files.map((f) => f.name).join(', ')}
+                {files.length === 0 && (
+                  <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">
+                    Select one or more files at a time
                   </p>
                 )}
               </div>
@@ -561,6 +572,50 @@ export default function ReportAgentPage() {
                 className="hidden"
               />
             </label>
+            {/* File list with remove buttons */}
+            {files.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {files.length} file{files.length > 1 ? 's' : ''} selected
+                  </span>
+                  {!running && files.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setFiles([])}
+                      className="text-sm font-medium text-red-500 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      Remove all
+                    </button>
+                  )}
+                </div>
+                <ul className="flex flex-wrap gap-2">
+                  {files.map((f) => (
+                    <li
+                      key={f.name}
+                      className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      <svg className="h-4 w-4 flex-shrink-0 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                      </svg>
+                      <span className="max-w-[200px] truncate">{f.name}</span>
+                      {!running && (
+                        <button
+                          type="button"
+                          onClick={() => removeFile(f.name)}
+                          className="ml-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-200"
+                          title={`Remove ${f.name}`}
+                        >
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <button
               type="button"
               onClick={runReport}
