@@ -143,8 +143,11 @@ def _clean_markdown_text(text: str) -> str:
     return text
 
 
+MUTED_COLOR = RGBColor(0x7A, 0x7A, 0x7A)
+
 def _render_text_lines(tf, lines: list[str], is_first_block: bool):
     """Render non-table markdown lines into a text frame."""
+    in_sources = False
     for i, line in enumerate(lines):
         if i == 0 and is_first_block:
             p = tf.paragraphs[0]
@@ -152,9 +155,41 @@ def _render_text_lines(tf, lines: list[str], is_first_block: bool):
             p = tf.add_paragraph()
 
         stripped = line.strip()
+
+        # Detect start of Sources section (heading, bold, or plain)
+        clean = _clean_markdown_text(stripped).strip()
+        if stripped.startswith("#"):
+            clean = stripped.lstrip("# ").strip()
+        if re.match(r'^sources?\b', clean, re.IGNORECASE):
+            in_sources = True
+
         if not stripped:
             p.text = ""
-            p.space_after = Pt(4)
+            p.space_after = Pt(2) if in_sources else Pt(4)
+            continue
+
+        if in_sources:
+            # Skip horizontal rules
+            if re.match(r'^[-_*]{3,}$', stripped):
+                p.text = ""
+                p.space_after = Pt(0)
+                continue
+            # Everything in Sources gets small muted text
+            if stripped.startswith("#"):
+                p.text = _clean_markdown_text(stripped.lstrip("# ").strip())
+                p.font.size = Pt(4)
+                p.font.bold = False
+                p.font.color.rgb = MUTED_COLOR
+                p.space_after = Pt(0)
+            elif re.match(r'^[-*+]\s', stripped):
+                p.text = "  \u2022 " + _clean_markdown_text(stripped[2:])
+                p.font.size = Pt(4)
+                p.font.color.rgb = MUTED_COLOR
+            else:
+                p.text = _clean_markdown_text(stripped)
+                p.font.size = Pt(4)
+                p.font.color.rgb = MUTED_COLOR
+                p.font.name = "Arial"
             continue
 
         # Handle headers (# ## ### ####)
@@ -176,12 +211,6 @@ def _render_text_lines(tf, lines: list[str], is_first_block: bool):
             p.font.bold = True
             p.font.color.rgb = PRIMARY_COLOR
             p.space_after = Pt(8)
-        elif stripped.startswith("### "):
-            p.text = stripped[4:]
-            p.font.size = Pt(16)
-            p.font.bold = True
-            p.font.color.rgb = ACCENT_COLOR
-            p.space_after = Pt(6)
         # Handle bullet points (-, *, +, or numbered 1. 2.)
         elif re.match(r'^[-*+]\s', stripped):
             p.text = "  \u2022 " + _clean_markdown_text(stripped[2:])

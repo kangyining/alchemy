@@ -89,6 +89,14 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     background: var(--bar); padding: 6px 10px; margin: 12px 0 8px 0;
   }
 
+  /* Sources section — fine print */
+  .sources-section { font-size: 6pt; color: var(--muted); line-height: 1.2; }
+  .sources-section h2, .sources-section h3 {
+    font-size: 7pt; background: none; color: var(--muted);
+    padding: 0; margin: 4px 0 2px 0; font-weight: 600;
+  }
+  .sources-section p, .sources-section li { font-size: 6pt; margin: 1px 0; }
+
   /* Title bar for content slides */
   .title-bar {
     background: transparent;
@@ -202,7 +210,11 @@ def _extract_cover_lines(md_text: str) -> tuple[str, str]:
 
 def _strip_bold_from_sources(md_text):
     """Remove **bold** markers from the Sources section so citations stay plain."""
-    pattern = re.compile(r'^(#+\s*sources\b)', re.IGNORECASE | re.MULTILINE)
+    # Match heading style (## Sources) or bold style (**Sources**) or plain "Sources" at line start
+    pattern = re.compile(
+        r'^(#{1,4}\s*sources?\b|\*\*sources?\*\*|sources?\s*:?)',
+        re.IGNORECASE | re.MULTILINE,
+    )
     match = pattern.search(md_text)
     if not match:
         return md_text
@@ -211,6 +223,26 @@ def _strip_bold_from_sources(md_text):
     sources_block = re.sub(r'\*\*([^*]+)\*\*', r'\1', sources_block)
     sources_block = re.sub(r'__([^_]+)__', r'\1', sources_block)
     return before + sources_block
+
+
+def _wrap_sources_section(html):
+    """Wrap everything from the Sources heading/label onward in a small-font div."""
+    # Match <h2>Sources</h2>, <h3>Sources</h3>, <p><strong>Sources</strong>..., <p>Sources..., or <hr> followed by Sources
+    pattern = re.compile(
+        r'(<h[1-4][^>]*>\s*Sources?\b|<p>\s*<strong>\s*Sources?\b|<p>\s*Sources?\b)',
+        re.IGNORECASE,
+    )
+    match = pattern.search(html)
+    if not match:
+        return html
+    # Also grab a preceding <hr> if it's right before the sources block
+    before = html[:match.start()]
+    after = html[match.start():]
+    if before.rstrip().endswith('<hr>') or before.rstrip().endswith('<hr />') or before.rstrip().endswith('<hr/>'):
+        hr_pos = max(before.rfind('<hr>'), before.rfind('<hr />'), before.rfind('<hr/>'))
+        after = before[hr_pos:] + after
+        before = before[:hr_pos]
+    return before + '<div class="sources-section">' + after + '</div>'
 
 
 def _svg_to_png_bytes(svg: str, height_px: int = 50) -> bytes | None:
@@ -407,6 +439,7 @@ async def assemble_report(
                 content,
                 extensions=["tables", "fenced_code"],
             )
+            html_content = _wrap_sources_section(html_content)
         chart_img_b64 = None
         if chart_bytes:
             chart_img_b64 = base64.b64encode(chart_bytes).decode("utf-8")
