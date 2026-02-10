@@ -83,6 +83,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
   td:first-child, th:first-child { text-align: left; }
   tr:nth-child(even) { background: #fafafa; }
   img { max-width: 92%; height: auto; display: block; margin: 10px auto; }
+  .roadmap-chart img { max-width: 100%; max-height: 5.8in; margin: 0 auto; }
   h2 { font-size: 22pt; font-weight: 800; margin: 6px 0 8px 0; }
   h3 {
     font-size: 13.5pt; font-weight: 700; color: #ffffff;
@@ -154,11 +155,13 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     <div class="title-bar">{{ section.title }}</div>
     {% endif %}
     {{ section.html_content }}
+    {% if section.chart_img %}
+    <div{% if section.is_roadmap %} class="roadmap-chart"{% endif %}>
+    <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart"/>
+    </div>
+    {% endif %}
     {% endif %}
   </div>
-  {% if section.chart_img %}
-  <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart"/>
-  {% endif %}
 </div>
 {% endfor %}
 </body>
@@ -220,6 +223,18 @@ def _clean_not_found_markers(md_text):
     # Clean up double spaces left behind
     md_text = re.sub(r'  +', ' ', md_text)
     return md_text
+
+
+def _extract_sources_only(md_text):
+    """Keep only the Sources section from markdown, discard everything before it."""
+    pattern = re.compile(
+        r'^(#{1,4}\s*sources?\b|\*\*sources?\*\*|sources?\s*:)',
+        re.IGNORECASE | re.MULTILINE,
+    )
+    match = pattern.search(md_text)
+    if not match:
+        return ""
+    return md_text[match.start():]
 
 
 def _strip_bold_from_sources(md_text):
@@ -386,11 +401,14 @@ async def assemble_report(
                 CONTENT_WIDTH,
                 Inches(4.5),
             )
-            remaining = render_markdown_to_textbox(
-                slide, pptx_content,
-                left=CONTENT_LEFT, top=Inches(5.8),
-                width=CONTENT_WIDTH, height=Inches(1.2),
-            )
+            # Only show sources below the chart, not the full text
+            chart_sources = _extract_sources_only(pptx_content)
+            if chart_sources:
+                remaining = render_markdown_to_textbox(
+                    slide, chart_sources,
+                    left=CONTENT_LEFT, top=Inches(5.8),
+                    width=CONTENT_WIDTH, height=Inches(1.2),
+                )
         elif spec.slide_type == SlideType.MIXED and chart_bytes:
             remaining = render_markdown_to_textbox(
                 slide, pptx_content,
@@ -447,8 +465,16 @@ async def assemble_report(
 
         # --- Build PDF section ---
         # Roadmap slides only show the chart image, no text/table
+        # Chart slides only show sources below the chart
         if spec.slide_type == SlideType.ROADMAP and chart_bytes:
             html_content = ""
+        elif spec.slide_type == SlideType.CHART and chart_bytes:
+            sources_md = _extract_sources_only(content)
+            if sources_md:
+                html_content = md_lib.markdown(sources_md, extensions=["tables", "fenced_code"])
+                html_content = _wrap_sources_section(html_content)
+            else:
+                html_content = ""
         else:
             html_content = md_lib.markdown(
                 content,
@@ -469,7 +495,8 @@ async def assemble_report(
             "html_content": html_content,
             "chart_img": chart_img_b64,
             "is_cover": spec.slide_number == 1,
-            "is_chart_only": spec.slide_type == SlideType.ROADMAP,
+            "is_chart_only": False,
+            "is_roadmap": spec.slide_type == SlideType.ROADMAP,
             "cover_logo_svg": INFINITY_TEXT_LOGO_SVG if spec.slide_number == 1 else "",
             "infinity_logo_png": INFINITY_LOGO_PNG_B64 if spec.slide_number == 1 else "",
             "cover_date": cover_date,
@@ -486,6 +513,7 @@ async def assemble_report(
                 "chart_img": extra_chart_b64,
                 "is_cover": False,
                 "is_chart_only": True,  # Skip title bar rendering
+                "is_roadmap": spec.slide_type == SlideType.ROADMAP,
                 "cover_logo_svg": "",
                 "infinity_logo_png": "",
                 "cover_date": "",

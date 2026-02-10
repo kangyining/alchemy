@@ -330,11 +330,8 @@ def _render_roadmap_timeline_page(title: str, milestones: list, page_title_suffi
         ax.set_facecolor("#FFFFFF")
         fig.patch.set_facecolor("#FFFFFF")
 
-        display_title = (title + " " + page_title_suffix).strip().upper()
-        ax.text(0.5, 0.98, display_title, ha="center", va="top", fontsize=12, fontweight="bold", color="#5B5B5B")
-
         line_x = 0.22
-        top_y, bottom_y = 0.88, 0.04
+        top_y, bottom_y = 0.92, 0.04
         ax.plot([line_x, line_x], [top_y, bottom_y], color="#9a9a9a", linewidth=1.2, zorder=0)
 
         status_color = {"past": "#393E41", "near_future": "#A89968", "long_term": "#9A8A5A"}
@@ -363,7 +360,7 @@ def _render_roadmap_timeline_page(title: str, milestones: list, page_title_suffi
 
     plt.tight_layout()
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", pad_inches=0.15, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
