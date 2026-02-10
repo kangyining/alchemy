@@ -208,6 +208,20 @@ def _extract_cover_lines(md_text: str) -> tuple[str, str]:
     return date_line, title_line
 
 
+def _clean_not_found_markers(md_text):
+    """Remove [NOT FOUND IN SOURCE] fragments and their surrounding context."""
+    # Remove parenthetical chunks containing the marker, e.g. "(Subscription Amount [NOT FOUND IN SOURCE])"
+    md_text = re.sub(r'\s*\([^)]*\[NOT FOUND IN SOURCE\][^)]*\)', '', md_text)
+    # Remove standalone markers with optional leading punctuation/whitespace
+    md_text = re.sub(r'\s*\[NOT FOUND IN SOURCE\]\.?', '', md_text)
+    # Drop entire bullet lines where the content after the label is now empty
+    # e.g. "- **The Ask:**  " with nothing left
+    md_text = re.sub(r'^[ \t]*[-*+]\s+\*\*[^*]+\*\*:?\s*\.?\s*$', '', md_text, flags=re.MULTILINE)
+    # Clean up double spaces left behind
+    md_text = re.sub(r'  +', ' ', md_text)
+    return md_text
+
+
 def _strip_bold_from_sources(md_text):
     """Remove **bold** markers from the Sources section so citations stay plain."""
     # Match heading style (## Sources) or bold style (**Sources**) or plain "Sources" at line start
@@ -285,6 +299,7 @@ async def assemble_report(
         content = state.get(slide_content_key(spec.slide_number), "")
         if not content:
             continue
+        content = _clean_not_found_markers(content)
         content = _strip_bold_from_sources(content)
         if spec.slide_number == 1:
             content = _inject_cover_date(content)
@@ -454,7 +469,7 @@ async def assemble_report(
             "html_content": html_content,
             "chart_img": chart_img_b64,
             "is_cover": spec.slide_number == 1,
-            "is_chart_only": False,
+            "is_chart_only": spec.slide_type == SlideType.ROADMAP,
             "cover_logo_svg": INFINITY_TEXT_LOGO_SVG if spec.slide_number == 1 else "",
             "infinity_logo_png": INFINITY_LOGO_PNG_B64 if spec.slide_number == 1 else "",
             "cover_date": cover_date,
