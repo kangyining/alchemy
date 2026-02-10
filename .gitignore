@@ -35,6 +35,7 @@ output/
 
 # ADK
 *.db
+.adk/
 
 # Test artifacts
 sample_data/

@@ -11,7 +11,7 @@ from google.adk.events import Event
 from google.adk.models.google_llm import Gemini
 from google.genai import types as genai_types
 
-from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType
+from report_agents.prompts.registry import SLIDE_REGISTRY, SlideType, ChartType, ContextType
 from report_agents.tools.chart_generator import make_chart_tool, make_roadmap_tool
 from report_agents.tools.data_query import query_financial_data
 from report_agents.tools.financial_calc import calculate_financial_metrics
@@ -95,8 +95,8 @@ def create_slide_agents() -> list[BaseAgent]:
         if spec.slide_type == SlideType.ROADMAP:
             tools.append(make_roadmap_tool(spec.slide_number))
 
-        # TEXT slides use summary context; data-heavy slides use full context
-        if spec.slide_type == SlideType.TEXT:
+        # Use ContextType from registry to determine context size
+        if spec.context_type == ContextType.SUMMARY:
             before_callback = prepare_summary_context_request
         else:
             before_callback = prepare_full_context_request
