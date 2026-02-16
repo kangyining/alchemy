@@ -25,7 +25,7 @@ from report_agents.sub_agents.assembly_agent import assembly_agent
 logger = logging.getLogger(__name__)
 
 # Choose ingestion agent: set to True for testing (cached), False for production
-USE_CACHED_INGESTION = True
+USE_CACHED_INGESTION = False
 
 active_ingestion_agent = cached_ingestion_agent if USE_CACHED_INGESTION else ingestion_agent
 if USE_CACHED_INGESTION:
