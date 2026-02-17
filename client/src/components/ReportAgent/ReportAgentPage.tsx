@@ -73,11 +73,13 @@ function extractEventSummary(event: {
 }): { summary: string; truncated: boolean } {
   const textParts = event.content?.parts?.map((p) => p.text).filter(Boolean) as string[] | undefined;
   if (textParts && textParts.length > 0) {
-    return truncateText(textParts.join(' '));
+    const { text, truncated } = truncateText(textParts.join(' '));
+    return { summary: text, truncated };
   }
   const stateSummary = summarizeStateDelta(event.actions?.stateDelta);
   if (stateSummary) {
-    return truncateText(stateSummary);
+    const { text, truncated } = truncateText(stateSummary);
+    return { summary: text, truncated };
   }
   return { summary: '', truncated: false };
 }
@@ -198,6 +200,10 @@ export default function ReportAgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [artifacts, setArtifacts] = useState<{ pptxVersion?: number; pdfVersion?: number }>({});
+  /** Eagerly prefetched artifact data (name -> base64 + mime) so download works after Cloud Run scales down. */
+  const [prefetchedArtifacts, setPrefetchedArtifacts] = useState<
+    Record<string, { data: string; mimeType: string }>
+  >({});
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>('idle');
   const [streamWarning, setStreamWarning] = useState<string | null>(null);
@@ -271,30 +277,63 @@ export default function ReportAgentPage() {
     [flushPendingSteps],
   );
 
-  const downloadArtifact = useCallback(
-    async (artifactName: string, version: number, filename: string, key: 'pptx' | 'pdf') => {
-      if (!sessionId) {
-        setError('No session ID found for download.');
-        return;
-      }
-      setDownloading((prev) => ({ ...prev, [key]: true }));
+  /** Eagerly fetch artifact via ADK GET and store in state so download works after instance scales down. */
+  const prefetchArtifact = useCallback(
+    async (sid: string, artifactName: string, version: number) => {
       try {
         const res = await fetch(
-          `${apiBase}/apps/${APP_NAME}/users/${USER_ID}/sessions/${sessionId}/artifacts/${artifactName}/versions/${version}`,
+          `${apiBase}/apps/${APP_NAME}/users/${USER_ID}/sessions/${sid}/artifacts/${encodeURIComponent(artifactName)}/versions/${version}`,
         );
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Artifact fetch failed: ${res.status} ${text}`);
-        }
+        if (!res.ok) return;
         const json = (await res.json()) as Record<string, unknown>;
         const inline = getInlineData(json);
-        if (!inline?.data) {
-          throw new Error('Artifact missing inlineData.');
-        }
-        const mimeType = inline.mimeType || inferMimeTypeFromFilename(filename);
+        if (!inline?.data) return;
+        const mimeType = inline.mimeType || inferMimeTypeFromFilename(artifactName);
         const base64 = normalizeBase64(inline.data);
-        if (!base64) {
-          throw new Error('Artifact data was empty.');
+        if (!base64) return;
+        setPrefetchedArtifacts((prev) => ({
+          ...prev,
+          [artifactName]: { data: base64, mimeType },
+        }));
+      } catch {
+        // Prefetch best-effort; download will retry via GET if needed
+      }
+    },
+    [apiBase],
+  );
+
+  const downloadArtifact = useCallback(
+    async (artifactName: string, version: number, filename: string, key: 'pptx' | 'pdf') => {
+      setDownloading((prev) => ({ ...prev, [key]: true }));
+      try {
+        const prefetched = prefetchedArtifacts[artifactName];
+        let base64: string;
+        let mimeType: string;
+        if (prefetched?.data) {
+          base64 = prefetched.data;
+          mimeType = prefetched.mimeType;
+        } else {
+          if (!sessionId) {
+            setError('No session ID found for download.');
+            return;
+          }
+          const res = await fetch(
+            `${apiBase}/apps/${APP_NAME}/users/${USER_ID}/sessions/${sessionId}/artifacts/${encodeURIComponent(artifactName)}/versions/${version}`,
+          );
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Artifact fetch failed: ${res.status} ${text}`);
+          }
+          const json = (await res.json()) as Record<string, unknown>;
+          const inline = getInlineData(json);
+          if (!inline?.data) {
+            throw new Error('Artifact missing inlineData.');
+          }
+          mimeType = inline.mimeType || inferMimeTypeFromFilename(filename);
+          base64 = normalizeBase64(inline.data);
+          if (!base64) {
+            throw new Error('Artifact data was empty.');
+          }
         }
         let url: string | null = null;
         try {
@@ -318,7 +357,7 @@ export default function ReportAgentPage() {
         setDownloading((prev) => ({ ...prev, [key]: false }));
       }
     },
-    [apiBase, sessionId],
+    [apiBase, sessionId, prefetchedArtifacts],
   );
 
   const runReport = useCallback(async () => {
@@ -329,6 +368,7 @@ export default function ReportAgentPage() {
     setError(null);
     setSteps([]);
     setArtifacts({});
+    setPrefetchedArtifacts({});
     setStreamWarning(null);
     setCurrentStep(null);
     setProgress({});
@@ -484,6 +524,14 @@ export default function ReportAgentPage() {
                   ...(pdfVersion != null ? { pdfVersion } : {}),
                 }));
               }
+              // Eager prefetch: GET each artifact now while the Cloud Run instance is still warm.
+              // The stream only sends name+version; actual content is from ADK artifact API.
+              for (const [name, rawVersion] of Object.entries(delta)) {
+                const version = coerceVersion(rawVersion);
+                if (version != null && typeof name === 'string') {
+                  prefetchArtifact(sid, name, version);
+                }
+              }
             }
           } catch {
             // ignore parse errors for non-JSON lines
@@ -502,7 +550,7 @@ export default function ReportAgentPage() {
     } finally {
       setRunning(false);
     }
-  }, [files, apiBase, enqueueStep, flushPendingSteps]);
+  }, [files, apiBase, enqueueStep, flushPendingSteps, prefetchArtifact]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = e.target.files ? Array.from(e.target.files) : [];
