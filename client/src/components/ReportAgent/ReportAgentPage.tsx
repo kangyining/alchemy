@@ -3,19 +3,16 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 const APP_NAME = 'report_agents';
 const USER_ID = 'web-user';
 
-/** Base URL for report agent ADK. Local dev: use proxy /report-agent-api → localhost:8000. Prod: set VITE_REPORT_AGENT_URL to Cloud Run URL. */
+/** Base URL for report agent ADK. Uses same-origin /report-agent-api (server proxies to REPORT_AGENT_URL). Override with VITE_REPORT_AGENT_URL if needed. */
 function getReportAgentBaseUrl(): string {
   const env = import.meta.env.VITE_REPORT_AGENT_URL;
   if (env && typeof env === 'string' && env.trim() !== '') {
     return env.trim().replace(/\/$/, '');
   }
-  if (import.meta.env.DEV) {
-    return ''; // same origin → Vite proxy /report-agent-api
-  }
-  return '';
+  return ''; // same origin → /report-agent-api (proxied by server to REPORT_AGENT_URL)
 }
 
-/** In dev we use a path prefix so Vite proxies to localhost:8000. */
+/** Base URL for report-agent API: env override or same-origin /report-agent-api. */
 function getReportAgentApiBase(): string {
   const base = getReportAgentBaseUrl();
   if (base) {

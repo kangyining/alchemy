@@ -3,6 +3,9 @@ const { logger } = require('@librechat/data-schemas');
 const { loadServiceKey, isUserProvided } = require('@librechat/api');
 const { config } = require('./EndpointService');
 
+/** Path to api/data/auth.json (GCP service key). Same path used by report-agent proxy. */
+const authJsonPath = path.join(__dirname, '../../..', 'data', 'auth.json');
+
 async function loadAsyncEndpoints() {
   let serviceKey, googleUserProvides;
   const { googleKey } = config;
@@ -15,8 +18,7 @@ async function loadAsyncEndpoints() {
     googleUserProvides = isUserProvided(googleKey);
   } else {
     /** Only attempt to load service key if GOOGLE_KEY is not provided */
-    const serviceKeyPath =
-      process.env.GOOGLE_SERVICE_KEY_FILE || path.join(__dirname, '../../..', 'data', 'auth.json');
+    const serviceKeyPath = process.env.GOOGLE_SERVICE_KEY_FILE || authJsonPath;
 
     try {
       serviceKey = await loadServiceKey(serviceKeyPath);
@@ -32,3 +34,4 @@ async function loadAsyncEndpoints() {
 }
 
 module.exports = loadAsyncEndpoints;
+module.exports.authJsonPath = authJsonPath;
