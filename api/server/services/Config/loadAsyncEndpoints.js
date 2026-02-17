@@ -6,6 +6,9 @@ const { config } = require('./EndpointService');
 
 const { openAIApiKey, azureOpenAIApiKey, useAzurePlugins, userProvidedOpenAI, googleKey } = config;
 
+/** Path to api/data/auth.json (GCP service key). Same path used by report-agent proxy. */
+const authJsonPath = path.join(__dirname, '../../..', 'data', 'auth.json');
+
 /**
  * Load async endpoints and return a configuration object
  * @param {AppConfig} [appConfig] - The app configuration object
@@ -21,8 +24,7 @@ async function loadAsyncEndpoints(appConfig) {
     googleUserProvides = isUserProvided(googleKey);
   } else {
     /** Only attempt to load service key if GOOGLE_KEY is not provided */
-    const serviceKeyPath =
-      process.env.GOOGLE_SERVICE_KEY_FILE || path.join(__dirname, '../../..', 'data', 'auth.json');
+    const serviceKeyPath = process.env.GOOGLE_SERVICE_KEY_FILE || authJsonPath;
 
     try {
       serviceKey = await loadServiceKey(serviceKeyPath);
@@ -52,3 +54,4 @@ async function loadAsyncEndpoints(appConfig) {
 }
 
 module.exports = loadAsyncEndpoints;
+module.exports.authJsonPath = authJsonPath;

@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - type: bind
         source: ./librechat.yaml
@@ -13,3 +15,9 @@ services:
       - type: bind
         source: ./api/data/auth.json
         target: /app/api/data/auth.json
+      - type: bind
+        source: ./pdf-output
+        target: /app/pdf-output
+      - type: bind
+        source: ./mcp-servers
+        target: /app/mcp-servers

@@ -10,6 +10,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 // https://vitejs.dev/config/
 const backendPort = process.env.BACKEND_PORT && Number(process.env.BACKEND_PORT) || 3080;
 const backendURL = process.env.HOST ? `http://${process.env.HOST}:${backendPort}` : `http://localhost:${backendPort}`;
+// Same as backend: REPORT_AGENT_URL. Fallback for dev-only: REPORT_AGENT_PROXY_TARGET or localhost:8000
+const reportAgentTarget =
+  process.env.REPORT_AGENT_URL || process.env.REPORT_AGENT_PROXY_TARGET || 'http://localhost:8000';
 
 export default defineConfig(({ command }) => ({
   base: '',
@@ -26,6 +29,12 @@ export default defineConfig(({ command }) => ({
       '/oauth': {
         target: backendURL,
         changeOrigin: true,
+      },
+      // Report agent ADK. Proxies to REPORT_AGENT_URL (or REPORT_AGENT_PROXY_TARGET / localhost:8000).
+      '/report-agent-api': {
+        target: reportAgentTarget,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/report-agent-api/, ''),
       },
     },
   },
