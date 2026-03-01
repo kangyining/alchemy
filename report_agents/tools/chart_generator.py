@@ -23,21 +23,22 @@ from report_agents.utils.gemini_models import GEMINI_MODEL, GEMINI_IMAGE_MODEL
 logger = logging.getLogger(__name__)
 
 CHART_STYLE_PROMPT = """Professional financial report chart. Clean, modern design.
-Dark gray (#5B5B5B) for titles, gold (#A89968) as primary color, white background.
-Sans-serif font (Arial or Helvetica). Clear axis labels with units.
-Value labels displayed on each data point. No gridlines clutter.
-High resolution, presentation-ready. Letter landscape aspect ratio."""
+Dark gray (#595959) for titles, gold (#A89968) as primary color, white background.
+Dark charcoal (#252829) as secondary color. Sans-serif font (Arial or Helvetica).
+Clear axis labels with units. Value labels displayed on each data point.
+No gridlines clutter. High resolution, presentation-ready.
+A4 landscape aspect ratio (11.69 x 8.27 inches)."""
 
 # Matplotlib style config matching brand colors (gold/gray palette)
 MPL_COLORS = [
-    "#A89968",  # Gold (accent/primary)
-    "#5B5B5B",  # Dark gray (primary)
-    "#808080",  # Medium gray
-    "#6B6B6B",  # Medium-dark gray
-    "#B0B0B0",  # Light gray
-    "#2B2B2B",  # Near black
+    "#A89968",  # Gold (theme accent1)
+    "#252829",  # Dark charcoal (theme accent2)
+    "#595959",  # Dark gray (section headers)
+    "#A5A5A5",  # Medium gray (theme accent3)
+    "#122A33",  # Dark navy (theme accent6)
     "#9A8A5A",  # Darker gold
-    "#4A4A4A",  # Charcoal
+    "#F0F0F0",  # Light gray (theme lt2)
+    "#000000",  # Pure black
 ]
 MPL_STYLE = {
     "font.family": "sans-serif",
@@ -45,9 +46,9 @@ MPL_STYLE = {
     "figure.facecolor": "#FFFFFF",
     "axes.titlesize": 16,
     "axes.titleweight": "bold",
-    "axes.titlecolor": "#5B5B5B",
+    "axes.titlecolor": "#595959",
     "axes.labelsize": 12,
-    "axes.labelcolor": "#5B5B5B",
+    "axes.labelcolor": "#595959",
 }
 plt.rcParams.update(MPL_STYLE)
 
@@ -137,7 +138,7 @@ def _render_matplotlib_bar_chart(data: dict) -> bytes:
     """Render a bar chart with matplotlib, return PNG bytes."""
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.bar(data["categories"], data["values"], color=MPL_COLORS[0])
-    ax.set_title(data.get("title", ""), fontsize=16, fontweight="bold", color="#5B5B5B")
+    ax.set_title(data.get("title", ""), fontsize=16, fontweight="bold", color="#595959")
     ax.set_xlabel(data.get("x_label", ""), fontsize=12)
     ax.set_ylabel(data.get("y_label", ""), fontsize=12)
     for bar, val in zip(bars, data["values"]):
@@ -229,7 +230,7 @@ def _render_matplotlib_line_chart(data: dict) -> bytes:
             data.get("title", ""),
             fontsize=16,
             fontweight="bold",
-            color="#5B5B5B",
+            color="#595959",
         )
         ax_left.set_xlabel(data.get("x_label", ""), fontsize=12)
 
@@ -265,7 +266,7 @@ def _render_matplotlib_line_chart(data: dict) -> bytes:
             data.get("title", ""),
             fontsize=16,
             fontweight="bold",
-            color="#5B5B5B",
+            color="#595959",
         )
         ax.set_xlabel(data.get("x_label", ""), fontsize=12)
         ax.set_ylabel(data.get("y_label", ""), fontsize=12)
@@ -289,7 +290,7 @@ def _render_matplotlib_pie_chart(data: dict) -> bytes:
         data["values"], labels=data["categories"], colors=colors,
         autopct="%1.1f%%", startangle=90, textprops={"fontsize": 11},
     )
-    ax.set_title(data.get("title", ""), fontsize=16, fontweight="bold", color="#5B5B5B")
+    ax.set_title(data.get("title", ""), fontsize=16, fontweight="bold", color="#595959")
     plt.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
@@ -334,7 +335,7 @@ def _render_roadmap_timeline_page(title: str, milestones: list, page_title_suffi
         top_y, bottom_y = 0.92, 0.04
         ax.plot([line_x, line_x], [top_y, bottom_y], color="#9a9a9a", linewidth=1.2, zorder=0)
 
-        status_color = {"past": "#393E41", "near_future": "#A89968", "long_term": "#9A8A5A"}
+        status_color = {"past": "#252829", "near_future": "#A89968", "long_term": "#122A33"}
         box_h = ROADMAP_BOX_HEIGHT
         step = ROADMAP_CELL_STEP
         for i, m in enumerate(milestones):

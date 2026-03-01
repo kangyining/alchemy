@@ -10,7 +10,6 @@ from pathlib import Path
 
 import markdown as md_lib
 from jinja2 import Template
-from pptx import Presentation
 from pptx.util import Inches, Pt
 from weasyprint import HTML
 
@@ -28,6 +27,7 @@ from report_agents.utils.pptx_styles import (
     TEXT_COLOR,
     add_title_bar,
     render_markdown_to_textbox,
+    load_template_presentation,
 )
 from report_agents.utils.state_keys import slide_content_key, slide_chart_image_key
 
@@ -58,12 +58,13 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
 <style>
   @page { size: landscape; margin: 0.75in; }
   :root {
-    --ink: #111111;
+    --ink: #000000;
     --muted: #7a7a7a;
     --accent: #A89968;
-    --bar: #5b5b5b;
-    --light: #f2f2f2;
+    --bar: #595959;
+    --light: #F0F0F0;
     --grid: #e5e5e5;
+    --border: #A5A5A5;
   }
   body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); line-height: 1.4; }
   .slide { page-break-after: always; padding: 0; position: relative; }
@@ -77,11 +78,11 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     border-left: 4px solid var(--bar);
   }
   table { border-collapse: collapse; width: 100%; margin: 10px 0 14px 0; }
-  th, td { border: 1px solid var(--grid); padding: 8px 10px; font-size: 10.5pt; }
-  th { background: var(--bar); color: #ffffff; text-align: center; }
-  td { text-align: right; }
-  td:first-child, th:first-child { text-align: left; }
-  tr:nth-child(even) { background: #fafafa; }
+  th, td { border: 0.25pt solid var(--border); padding: 6px 8px; }
+  th { background: var(--bar); color: #ffffff; text-align: center; font-weight: bold; font-size: 10.5pt; border: none; }
+  td { text-align: left; font-size: 10pt; background: var(--light); }
+  td:first-child { background: var(--bar); color: #ffffff; font-weight: bold; text-align: center; font-size: 10.5pt; border: none; }
+  th:first-child { text-align: center; }
   img { max-width: 92%; height: auto; display: block; margin: 10px auto; }
   .roadmap-chart img { max-width: 100%; max-height: 5.8in; margin: 0 auto; }
   h2 { font-size: 22pt; font-weight: 800; margin: 6px 0 8px 0; }
@@ -102,7 +103,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
   .title-bar {
     background: transparent;
     color: var(--ink);
-    font-size: 24pt;
+    font-size: 35pt;
     font-weight: bold;
     padding: 0;
     margin: 0 0 0.25in 0;
@@ -122,7 +123,7 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     color: var(--ink); font-size: 12pt; letter-spacing: 0.08em;
     text-transform: uppercase;
   }
-  .cover-title { color: var(--accent); font-size: 24pt; font-weight: bold; margin: 2in 0; }
+  .cover-title { color: var(--accent); font-size: 28pt; font-weight: bold; margin: 2in 0; }
   .cover-branding { }
   .cover-branding svg { height: 50px; width: auto; display: block; }
   .cover-infinity-logo {
@@ -303,9 +304,7 @@ async def assemble_report(
     Returns:
         Dict with status, slides_generated, pptx_bytes, pdf_bytes.
     """
-    prs = Presentation()
-    prs.slide_width = SLIDE_WIDTH
-    prs.slide_height = SLIDE_HEIGHT
+    prs = load_template_presentation()
 
     pdf_sections = []
     slides_generated = 0
@@ -331,7 +330,7 @@ async def assemble_report(
             cover_date_line, cover_title_line = _extract_cover_lines(pptx_content)
 
         # --- Build PPTX slide ---
-        slide_layout = prs.slide_layouts[6]  # Blank layout
+        slide_layout = prs.slide_layouts[17]  # Blank layout
         slide = prs.slides.add_slide(slide_layout)
 
         # Load chart image if this slide has one
@@ -378,7 +377,7 @@ async def assemble_report(
             )
             title_tf = title_box.text_frame
             title_tf.text = cover_title_line
-            title_tf.paragraphs[0].font.size = Pt(21)
+            title_tf.paragraphs[0].font.size = Pt(28)
             title_tf.paragraphs[0].font.bold = True
             title_tf.paragraphs[0].font.color.rgb = ACCENT_COLOR
             title_tf.paragraphs[0].font.name = "Arial"
@@ -413,13 +412,13 @@ async def assemble_report(
             remaining = render_markdown_to_textbox(
                 slide, pptx_content,
                 left=CONTENT_LEFT, top=CONTENT_TOP,
-                width=Inches(5.5), height=CONTENT_HEIGHT,
+                width=Inches(5.0), height=CONTENT_HEIGHT,
             )
             img_stream = io.BytesIO(chart_bytes)
             slide.shapes.add_picture(
                 img_stream,
-                Inches(6.75), CONTENT_TOP,
-                Inches(5.8), Inches(4.0),
+                Inches(6.1), CONTENT_TOP,
+                Inches(5.1), Inches(4.5),
             )
         else:
             remaining = render_markdown_to_textbox(slide, pptx_content)

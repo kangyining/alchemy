@@ -11,11 +11,12 @@ cached parsing results. Generate the cache first with:
     python -m report_agents.scripts.generate_cache
 """
 
+import logging
+import os
+
 from google.adk.agents import SequentialAgent
 from google.adk.apps.app import App
 from google.adk.agents.context_cache_config import ContextCacheConfig
-
-import logging
 
 from report_agents.sub_agents.cached_ingestion_agent import cached_ingestion_agent
 from report_agents.sub_agents.ingestion_agent import ingestion_agent
@@ -24,8 +25,7 @@ from report_agents.sub_agents.assembly_agent import assembly_agent
 
 logger = logging.getLogger(__name__)
 
-# Choose ingestion agent: set to True for testing (cached), False for production
-USE_CACHED_INGESTION = False
+USE_CACHED_INGESTION = os.environ.get("USE_CACHED_INGESTION", "").lower() in ("true", "1", "yes")
 
 active_ingestion_agent = cached_ingestion_agent if USE_CACHED_INGESTION else ingestion_agent
 if USE_CACHED_INGESTION:
