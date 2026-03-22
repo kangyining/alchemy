@@ -18,7 +18,7 @@ from google import genai
 from google.adk.tools import ToolContext
 from google.genai import types as genai_types
 
-from report_agents.utils.gemini_models import GEMINI_PRO_MODEL, GEMINI_IMAGE_MODEL
+from report_agents.utils.gemini_models import GEMINI_MODEL, GEMINI_IMAGE_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ def _validate_chart_numbers(client, image_bytes: bytes, source_data: dict) -> bo
     """Ask Gemini to read the chart image and verify numbers match source data."""
     try:
         response = client.models.generate_content(
-            model=GEMINI_PRO_MODEL,
+            model=GEMINI_MODEL,
             contents=[
                 genai_types.Part.from_data(data=image_bytes, mime_type="image/png"),
                 (
