@@ -31,10 +31,14 @@ RUN uv export --no-hashes --no-emit-project > requirements.txt && \
 
 # Copy application code
 COPY report_agents/ ./report_agents/
+COPY main.py ./
 
 # Set environment variables
-ENV PORT=8000
+ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
+# Parent of agent packages (each subdir is an agent); matches former api_server path
+ENV ADK_AGENTS_DIR=/app
 
-# Run the ADK server (use shell form to expand $PORT)
-CMD python -m google.adk.cli api_server --port $PORT --host 0.0.0.0 report_agents
+# Hypercorn accepts h2c on plain HTTP (Cloud Run with --use-http2) and h2 over TLS
+# locally via ALPN.
+CMD ["sh", "-c", "exec hypercorn main:app --bind 0.0.0.0:${PORT}"]
