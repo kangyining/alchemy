@@ -199,11 +199,14 @@ Output your response as markdown. Do NOT use bold (**) markers.
 from report_agents.prompts.slide_01_cover import PROMPT as SLIDE_01_PROMPT
 from report_agents.prompts.slide_02_executive_summary import PROMPT as SLIDE_02_PROMPT
 from report_agents.prompts.slide_03_revenue_breakdown import PROMPT as SLIDE_03_PROMPT
-from report_agents.prompts.slide_04_market_analysis import PROMPT as SLIDE_04_PROMPT
-from report_agents.prompts.slide_05_roadmap_extraction import PROMPT as SLIDE_05_PROMPT
-from report_agents.prompts.slide_06_risks_mitigations import PROMPT as SLIDE_06_PROMPT
-from report_agents.prompts.slide_07_recommendations_approvals import PROMPT as SLIDE_07_PROMPT
-from report_agents.prompts.slide_08_business_plan_feasibility import PROMPT as SLIDE_08_PROMPT
+from report_agents.prompts.slide_04_revenue_breakdown_table import PROMPT as SLIDE_04_PROMPT
+from report_agents.prompts.slide_05_industry_overview import PROMPT as SLIDE_05_PROMPT
+from report_agents.prompts.slide_06_market_analysis import PROMPT as SLIDE_06_PROMPT
+from report_agents.prompts.slide_07_roadmap_extraction import PROMPT as SLIDE_07_PROMPT
+from report_agents.prompts.slide_08_risks_mitigations import PROMPT as SLIDE_08_PROMPT
+from report_agents.prompts.slide_09_recommendations_approvals import PROMPT as SLIDE_09_PROMPT
+from report_agents.prompts.slide_10_business_plan_feasibility import PROMPT as SLIDE_10_PROMPT
+from report_agents.prompts.slide_11_management_information_request import PROMPT as SLIDE_11_PROMPT
 
 
 SLIDE_REGISTRY: list[SlideSpec] = [
@@ -225,6 +228,14 @@ SLIDE_REGISTRY: list[SlideSpec] = [
     ),
     SlideSpec(
         slide_number=3,
+        title="Business Plan Feasibility",
+        slide_type=SlideType.TEXT,
+        chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,
+        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_10_PROMPT + ACCURACY_SUFFIX,
+    ),
+    SlideSpec(
+        slide_number=4,
         title="Revenue Breakdown",
         slide_type=SlideType.CHART,
         chart_type=ChartType.LINE,
@@ -232,43 +243,59 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_03_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
-        slide_number=4,
-        title="Market Analysis",
+        slide_number=5,
+        title="Revenue Breakdown (Data)",
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
         prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_04_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
-        slide_number=5,
-        title="Company Roadmap",
-        slide_type=SlideType.ROADMAP,
+        slide_number=6,
+        title="Industry Overview",
+        slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
         prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_05_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
-        slide_number=6,
-        title="Key Risks & Mitigants",
+        slide_number=7,
+        title="Market Analysis",
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
         prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_06_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
-        slide_number=7,
-        title="Recommendations & Approvals",
-        slide_type=SlideType.TABLE,
+        slide_number=8,
+        title="Company Roadmap",
+        slide_type=SlideType.ROADMAP,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
         prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_07_PROMPT + ACCURACY_SUFFIX,
     ),
     SlideSpec(
-        slide_number=8,
-        title="Business Plan Feasibility",
-        slide_type=SlideType.TEXT,
+        slide_number=9,
+        title="Key Risks & Mitigants",
+        slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
         prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_08_PROMPT + ACCURACY_SUFFIX,
+    ),
+    SlideSpec(
+        slide_number=10,
+        title="Recommendations & Approvals",
+        slide_type=SlideType.TABLE,
+        chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,
+        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_09_PROMPT + ACCURACY_SUFFIX,
+    ),
+    SlideSpec(
+        slide_number=11,
+        title="Management Information Request",
+        slide_type=SlideType.TABLE,
+        chart_type=ChartType.NONE,
+        context_type=ContextType.FULL,
+        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_11_PROMPT + ACCURACY_SUFFIX,
     ),
 ]
