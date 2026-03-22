@@ -357,6 +357,9 @@ async def assemble_report(
                 break
 
         remaining = ""
+        if spec.slide_number != 1:
+            add_title_bar(slide, spec.title)
+
         if spec.slide_number == 1:
             date_y = Inches(0.7)
             logo_y = SLIDE_HEIGHT - Inches(0.9)
