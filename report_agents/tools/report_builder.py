@@ -305,6 +305,8 @@ async def assemble_report(
         Dict with status, slides_generated, pptx_bytes, pdf_bytes.
     """
     prs = load_template_presentation()
+    if prs is None:
+        logger.info("PPTX template not found — skipping PPTX output, PDF only.")
 
     pdf_sections = []
     slides_generated = 0
@@ -329,10 +331,6 @@ async def assemble_report(
                 infinity_logo_png = INFINITY_LOGO_PNG_BYTES
             cover_date_line, cover_title_line = _extract_cover_lines(pptx_content)
 
-        # --- Build PPTX slide ---
-        slide_layout = prs.slide_layouts[17]  # Blank layout
-        slide = prs.slides.add_slide(slide_layout)
-
         # Load chart image if this slide has one
         chart_filename = state.get(
             slide_chart_image_key(spec.slide_number), ""
@@ -356,114 +354,113 @@ async def assemble_report(
             else:
                 break
 
-        remaining = ""
-        if spec.slide_number != 1:
-            add_title_bar(slide, spec.title)
+        # --- Build PPTX slide (skip if template not available) ---
+        if prs is not None:
+            slide_layout = prs.slide_layouts[17]  # Blank layout
+            slide = prs.slides.add_slide(slide_layout)
 
-        if spec.slide_number == 1:
-            date_y = Inches(0.7)
-            logo_y = SLIDE_HEIGHT - Inches(0.9)
-            title_height = Inches(0.6)
-            title_y = int((date_y + logo_y - title_height) / 2)
+            remaining = ""
+            if spec.slide_number != 1:
+                add_title_bar(slide, spec.title)
 
-            date_box = slide.shapes.add_textbox(
-                CONTENT_LEFT, date_y, Inches(6.5), Inches(0.4)
-            )
-            date_tf = date_box.text_frame
-            date_tf.text = cover_date_line.upper() if cover_date_line else ""
-            date_tf.paragraphs[0].font.size = Pt(12)
-            date_tf.paragraphs[0].font.color.rgb = TEXT_COLOR
-            date_tf.paragraphs[0].font.name = "Arial"
+            if spec.slide_number == 1:
+                date_y = Inches(0.7)
+                logo_y = SLIDE_HEIGHT - Inches(0.9)
+                title_height = Inches(0.6)
+                title_y = int((date_y + logo_y - title_height) / 2)
 
-            title_box = slide.shapes.add_textbox(
-                CONTENT_LEFT, title_y, Inches(10.5), title_height
-            )
-            title_tf = title_box.text_frame
-            title_tf.text = cover_title_line
-            title_tf.paragraphs[0].font.size = Pt(28)
-            title_tf.paragraphs[0].font.bold = True
-            title_tf.paragraphs[0].font.color.rgb = ACCENT_COLOR
-            title_tf.paragraphs[0].font.name = "Arial"
-        elif spec.slide_type == SlideType.ROADMAP and chart_bytes:
-            # Roadmap slides only show the timeline chart image — skip text/table
-            img_stream = io.BytesIO(chart_bytes)
-            slide.shapes.add_picture(
-                img_stream,
-                CONTENT_LEFT,
-                CONTENT_TOP,
-                CONTENT_WIDTH,
-                CONTENT_HEIGHT,
-            )
-        elif spec.slide_type == SlideType.CHART and chart_bytes:
-            img_stream = io.BytesIO(chart_bytes)
-            slide.shapes.add_picture(
-                img_stream,
-                CONTENT_LEFT,
-                CONTENT_TOP,
-                CONTENT_WIDTH,
-                Inches(4.5),
-            )
-            # Only show sources below the chart, not the full text
-            chart_sources = _extract_sources_only(pptx_content)
-            if chart_sources:
-                remaining = render_markdown_to_textbox(
-                    slide, chart_sources,
-                    left=CONTENT_LEFT, top=Inches(5.8),
-                    width=CONTENT_WIDTH, height=Inches(1.2),
+                date_box = slide.shapes.add_textbox(
+                    CONTENT_LEFT, date_y, Inches(6.5), Inches(0.4)
                 )
-        elif spec.slide_type == SlideType.MIXED and chart_bytes:
-            remaining = render_markdown_to_textbox(
-                slide, pptx_content,
-                left=CONTENT_LEFT, top=CONTENT_TOP,
-                width=Inches(5.0), height=CONTENT_HEIGHT,
-            )
-            img_stream = io.BytesIO(chart_bytes)
-            slide.shapes.add_picture(
-                img_stream,
-                Inches(6.1), CONTENT_TOP,
-                Inches(5.1), Inches(4.5),
-            )
-        else:
-            remaining = render_markdown_to_textbox(slide, pptx_content)
+                date_tf = date_box.text_frame
+                date_tf.text = cover_date_line.upper() if cover_date_line else ""
+                date_tf.paragraphs[0].font.size = Pt(12)
+                date_tf.paragraphs[0].font.color.rgb = TEXT_COLOR
+                date_tf.paragraphs[0].font.name = "Arial"
 
-        if spec.slide_number == 1 and cover_logo_png:
-            slide.shapes.add_picture(
-                io.BytesIO(cover_logo_png),
-                CONTENT_LEFT,
-                SLIDE_HEIGHT - Inches(0.9),
-                height=Inches(0.45),
-            )
-        if spec.slide_number == 1 and infinity_logo_png:
-            logo_height = Inches(1.4)
-            logo_margin = Inches(0.4)
-            logo_shape = slide.shapes.add_picture(
-                io.BytesIO(infinity_logo_png),
-                Inches(0),
-                Inches(0),
-                height=logo_height,
-            )
-            logo_shape.left = int(SLIDE_WIDTH - logo_shape.width - logo_margin)
-            logo_shape.top = int(SLIDE_HEIGHT - logo_shape.height - logo_margin)
+                title_box = slide.shapes.add_textbox(
+                    CONTENT_LEFT, title_y, Inches(10.5), title_height
+                )
+                title_tf = title_box.text_frame
+                title_tf.text = cover_title_line
+                title_tf.paragraphs[0].font.size = Pt(28)
+                title_tf.paragraphs[0].font.bold = True
+                title_tf.paragraphs[0].font.color.rgb = ACCENT_COLOR
+                title_tf.paragraphs[0].font.name = "Arial"
+            elif spec.slide_type == SlideType.ROADMAP and chart_bytes:
+                img_stream = io.BytesIO(chart_bytes)
+                slide.shapes.add_picture(
+                    img_stream,
+                    CONTENT_LEFT,
+                    CONTENT_TOP,
+                    CONTENT_WIDTH,
+                    CONTENT_HEIGHT,
+                )
+            elif spec.slide_type == SlideType.CHART and chart_bytes:
+                img_stream = io.BytesIO(chart_bytes)
+                slide.shapes.add_picture(
+                    img_stream,
+                    CONTENT_LEFT,
+                    CONTENT_TOP,
+                    CONTENT_WIDTH,
+                    Inches(4.5),
+                )
+                chart_sources = _extract_sources_only(pptx_content)
+                if chart_sources:
+                    remaining = render_markdown_to_textbox(
+                        slide, chart_sources,
+                        left=CONTENT_LEFT, top=Inches(5.8),
+                        width=CONTENT_WIDTH, height=Inches(1.2),
+                    )
+            elif spec.slide_type == SlideType.MIXED and chart_bytes:
+                remaining = render_markdown_to_textbox(
+                    slide, pptx_content,
+                    left=CONTENT_LEFT, top=CONTENT_TOP,
+                    width=Inches(5.0), height=CONTENT_HEIGHT,
+                )
+                img_stream = io.BytesIO(chart_bytes)
+                slide.shapes.add_picture(
+                    img_stream,
+                    Inches(6.1), CONTENT_TOP,
+                    Inches(5.1), Inches(4.5),
+                )
+            else:
+                remaining = render_markdown_to_textbox(slide, pptx_content)
 
-        # Create continuation slides for overflow content
-        while remaining:
-            cont_slide = prs.slides.add_slide(slide_layout)
-            add_title_bar(cont_slide, spec.title + " (cont.)")
-            remaining = render_markdown_to_textbox(cont_slide, remaining)
+            if spec.slide_number == 1 and cover_logo_png:
+                slide.shapes.add_picture(
+                    io.BytesIO(cover_logo_png),
+                    CONTENT_LEFT,
+                    SLIDE_HEIGHT - Inches(0.9),
+                    height=Inches(0.45),
+                )
+            if spec.slide_number == 1 and infinity_logo_png:
+                logo_height = Inches(1.4)
+                logo_margin = Inches(0.4)
+                logo_shape = slide.shapes.add_picture(
+                    io.BytesIO(infinity_logo_png),
+                    Inches(0),
+                    Inches(0),
+                    height=logo_height,
+                )
+                logo_shape.left = int(SLIDE_WIDTH - logo_shape.width - logo_margin)
+                logo_shape.top = int(SLIDE_HEIGHT - logo_shape.height - logo_margin)
 
-        # Create continuation slides for extra chart pages (multi-page roadmaps)
-        # Note: Chart image already contains "(cont. p2)" etc in its title, no title bar needed
-        for page_idx, extra_chart in enumerate(extra_chart_bytes_list, start=2):
-            cont_slide = prs.slides.add_slide(slide_layout)
-            # No title bar - chart fills the slide
-            img_stream = io.BytesIO(extra_chart)
-            cont_slide.shapes.add_picture(
-                img_stream,
-                CONTENT_LEFT,
-                Inches(0.5),  # Start near top since no title bar
-                CONTENT_WIDTH,
-                SLIDE_HEIGHT - Inches(1.0),  # Fill most of slide height
-            )
+            while remaining:
+                cont_slide = prs.slides.add_slide(slide_layout)
+                add_title_bar(cont_slide, spec.title + " (cont.)")
+                remaining = render_markdown_to_textbox(cont_slide, remaining)
+
+            for page_idx, extra_chart in enumerate(extra_chart_bytes_list, start=2):
+                cont_slide = prs.slides.add_slide(slide_layout)
+                img_stream = io.BytesIO(extra_chart)
+                cont_slide.shapes.add_picture(
+                    img_stream,
+                    CONTENT_LEFT,
+                    Inches(0.5),
+                    CONTENT_WIDTH,
+                    SLIDE_HEIGHT - Inches(1.0),
+                )
 
         # --- Build PDF section ---
         # Roadmap slides only show the chart image, no text/table
@@ -525,9 +522,11 @@ async def assemble_report(
         slides_generated += 1
 
     # --- Generate bytes ---
-    pptx_buf = io.BytesIO()
-    prs.save(pptx_buf)
-    pptx_bytes = pptx_buf.getvalue()
+    pptx_bytes = None
+    if prs is not None:
+        pptx_buf = io.BytesIO()
+        prs.save(pptx_buf)
+        pptx_bytes = pptx_buf.getvalue()
 
     html_str = PDF_TEMPLATE.render(sections=pdf_sections)
     pdf_bytes = HTML(string=html_str).write_pdf()
