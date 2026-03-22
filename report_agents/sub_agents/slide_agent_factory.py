@@ -73,7 +73,7 @@ def create_slide_agents() -> list[BaseAgent]:
     """
     agents: list[BaseAgent] = []
     #allowed_slides = (1, 5)
-    allowed_slides = (1, 2, 3, 4, 5, 6, 7)
+    allowed_slides = (1, 2, 3, 4, 5, 6, 7, 8)
 
     for spec in SLIDE_REGISTRY:
         if spec.slide_number not in allowed_slides:
