@@ -2,6 +2,15 @@
 # Deploy report-agents to Google Cloud Run
 # Usage: ./deploy.sh
 # Reads configuration from .env file
+#
+# The container runs Hypercorn on main:app (see Dockerfile). With --use-http2,
+# Cloud Run sends HTTP/2 cleartext (h2c) to the container; Hypercorn handles that
+# on the plain bind. For local TLS + ALPN h2: hypercorn main:app -b 0.0.0.0:8443
+# --certfile cert.pem --keyfile key.pem. Uvicorn 0.40+ has no --http2 flag.
+#
+# 413 + "nginx/..." in the HTML: a reverse proxy in front of this service is
+# rejecting large bodies (nginx default client_max_body_size is 1m). Fix on the
+# proxy host, not in this repo — see deploy/nginx-reverse-proxy.example.conf
 
 set -euo pipefail
 
@@ -22,6 +31,7 @@ echo "GOOGLE_CLOUD_PROJECT: $GOOGLE_CLOUD_PROJECT"
 echo "GOOGLE_CLOUD_LOCATION (Cloud Run): $GOOGLE_CLOUD_LOCATION"
 echo "VERTEX_AI_LOCATION (Gemini): ${VERTEX_AI_LOCATION:-global}"
 echo "SERVICE_NAME: ${SERVICE_NAME:-report-agents}"
+echo "ASGI server (container): Hypercorn main:app (HTTP/2: h2c on Cloud Run, ALPN h2 with local TLS)"
 echo "====================="
 
 # Build env vars string
@@ -41,5 +51,6 @@ gcloud run deploy "${SERVICE_NAME:-report-agents}" \
     --set-env-vars="$ENV_VARS" \
     --memory=4Gi \
     --cpu=2 \
-    --timeout=300 \
+    --use-http2 \
+    --timeout=10m \
     --allow-unauthenticated
