@@ -38,7 +38,7 @@ Include the following rows in this exact order (**12 rows**):
 # INSTRUCTIONS FOR COLUMNS
 * **Description:** Use the category names exactly as listed above (including rows 10–12).
 * **Key risks:** Specific threats from the documents for that category. For row 10, focus on risk allocation, CPs, MAE, closing timing. For row 11, focus on **missing** information. For row 12, focus on **quality, age, granularity, verifiability, and bias** of supplied information.
-* **Mitigants:** Specific offsets in the documents, or for rows 11–12 **what to obtain, do next, or condition**—including alignment with the **management RFI** row on the Recommendations slide.
+* **Mitigants:** Specific offsets in the documents, or for rows 11–12 **what to obtain, do next, or condition**—including alignment with the **Management Information Request** slide (comes after Recommendations & Approvals).
 
 Rules:
 - Dense, source-grounded wording; include $, %, and dates only when they appear in the materials or tool outputs.
