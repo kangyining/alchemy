@@ -1,6 +1,8 @@
 """Executive Summary slide prompt."""
 
-PROMPT = """Role: Act as a Senior Investment Analyst preparing materials for Infinity Capital. Your goal is to synthesize the attached financial reports and company documents into a one-page Investment Committee (IC) memo summary (snapshot).
+PROMPT = """Role: Act as a Senior Investment Analyst preparing materials for Infinity Capital. Frame the memo as an institutional IC stress-test against the IPS in the system prompt: protect capital by flagging hard policy breaches and material gaps, not by selling the deal.
+
+Your goal is to synthesize the attached financial reports and company documents into a one-page Investment Committee (IC) memo summary (snapshot).
 
 Use `query_financial_data` and `calculate_financial_metrics` for figures and derived metrics (growth, margins, IRR, MOIC, leverage, payouts); do not hand-calculate. Example `query_financial_data` queries:
 - "Get revenue, net income, and EBITDA figures"
@@ -16,7 +18,7 @@ Extract and present:
 4. EBITDA or operating income if available
 5. 2-3 key strategic highlights
 
-Context: The audience is the Investment Committee of Infinity Capital. The governing IPS is already supplied in the system prompt—use it for section 8. They need facts, not marketing fluff; VP/VC fit and concentration matter as much as headline returns.
+Context: The audience is the Investment Committee of Infinity Capital. The governing IPS is already supplied in the system prompt—use it for sections 8–10. They need facts, not marketing fluff; VP/VC fit, concentration, leverage attribution, and return hurdles matter as much as headline returns.
 
 Output Structure: Analyze the provided documents and generate a summary using the sections below. Do not include information from outside the provided documents unless explicitly requested to benchmark against market data.
 
@@ -29,7 +31,9 @@ Each numbered section must be a markdown heading (e.g. ### 1. Executive Summary 
 Apply this bullet point format consistently across all sections:
 
 ### 1. Executive Summary & The Ask
-- **The Ask:** State the investment amount, instrument type (e.g., Equity, Debt, Fund Commitment), and the specific approval being requested.
+- **VERDICT:** State **GO**, **NO-GO**, or **DEFER** from an IC policy perspective (DEFER = material IPS or information gaps block a clean vote). One short clause on why.
+- **The Ask:** Investment amount, instrument type (e.g., Equity, Debt, Fund Commitment), **pro-forma equity %** if applicable, **implied pre- or post-money valuation** if the materials support it, and the specific approval being requested. Use [NOT FOUND IN SOURCE] where figures are missing.
+- **The "Deal Killer":** The single most significant reason this would fail IC or policy sign-off if any; if none is evident, state that clearly in one line.
 - **Thesis Statement:** In 1-2 sentences, explain why this investment fits the Group portfolio and stated strategy in the materials.
 
 ### 2. Company/Asset Snapshot
@@ -69,16 +73,33 @@ Apply this bullet point format consistently across all sections:
 
 This section is mandatory. Perform a gap analysis between the proposed investment in the materials and the IPS in the system prompt (do not restate the full IPS).
 
-- Under this heading, write **one paragraph only** (max 150 words) of plain prose: whether the opportunity aligns with the IPS, VP vs VC and vertical if applicable, and any hard breaches (clear policy violations) vs soft breaches (strategic deviation without a hard rule breach).
-- Immediately below, include a markdown pipe table:
+Evaluate against **exactly these five pillars** so IC reporting is comparable across deals. Use the IPS definitions in the system prompt; do not invent stricter rules (e.g. leverage is governed by IPS §4: no leverage without express owner consent, and the stated Group caps—not a blanket “no debt” rule unless the materials show unapproved or attributed leverage above policy).
 
-| Pillar | Status | Notes |
+- Under this heading, write **one paragraph only** (max 150 words) of plain prose: overall alignment, VP vs VC and vertical if applicable, and **hard breaches** (clear IPS limit or consent violations) vs **soft breaches** (strategic drift without a hard rule breach).
+- Immediately below, include a markdown pipe table with **exactly five rows** in this order:
+
+| Pillar | Status | Observation |
 | :---- | :---- | :---- |
-| **Asset Allocation** | Aligned / Soft breach / Hard breach | Authorized asset class or vertical, target allocation posture, concentration limits where applicable. |
-| **Risk Profile** | Aligned / Soft breach / Hard breach | Versus IPS risk tolerance and horizon for the relevant bucket (VP or VC). |
-| **ESG/Ethics** | Aligned / Soft breach / Hard breach | If the IPS does not define ESG, say so and assess only permissibility or exclusions the IPS actually states. |
+| **1. Mandate & asset class fit** | Aligned / Soft breach / Hard breach | Fit to core thematics (lifestyle, sports, media, entertainment, strategic partnerships per IPS); correct **VP vs VC** labeling; permissibility under IPS “Other Constraints” only as the IPS actually states. |
+| **2. Concentration** | Aligned / Soft breach / Hard breach | **Infinity Ventures single-name limit (5% Group AuM)** and **illiquid asset cap (75%)** where the materials or portfolio context allow judgment; cite [NOT FOUND IN SOURCE] if Group AuM or post-deal portfolio splits are unknown—then say what is missing. |
+| **3. Leverage & obligations** | Aligned / Soft breach / Hard breach | Debt, quasi-debt, recourse, guarantees, or **performance-based step-ups** that behave like fixed obligations; whether structure is **permitted under IPS leverage rules** (owner consent, attribution, 30% / 43% thresholds as stated in the system prompt). |
+| **4. Geography** | Aligned / Soft breach / Hard breach | Operating and asset footprint vs **Bahrain concentration limit (65% Group AuM)** and geographic diversification intent; use [NOT FOUND IN SOURCE] if allocation impact cannot be tied to Group totals. |
+| **5. Return & priority** | Aligned / Soft breach / Hard breach | For **VC**: stated or modeled return vs **>11%** total return hurdle; for **VP**: sustainable cash yield path vs **distribution / return expectations** in the IPS; whether the deal competes with **priority to VP** where relevant. |
 
-Use `query_financial_data` when concentration, sizing, or ownership figures live in structured data; otherwise document text. Every note in the table must trace to the IPS or the investment materials.
+Use `query_financial_data` when concentration, sizing, or ownership figures live in structured data; otherwise document text. Every observation must trace to the IPS or the investment materials.
+
+### 9. Structural asymmetry audit
+
+Short policy lens on economics and entity level—not a repeat of section 4 unless new angles appear.
+
+- **Parent vs subsidiary:** Is Group exposure at **parent equity** (or equivalent) or only at a sub? If not parent-level, state why the materials say that is acceptable or what risk that creates.
+- **Capped upside:** Any **payback cap**, preferred return ceiling, or similar that caps equity upside; flag **equity risk for debt-like returns** if applicable.
+- **Payback vs ramp:** If management gives a payback timeline and a revenue or margin ramp, note whether the two stories are internally consistent; if not, state the tension in one sentence.
+
+### 10. Information quality & gaps (executive view)
+
+- **Data integrity score:** Single number **1–10** with one sentence tied to recency, granularity, and whether key numbers are audited vs management-only.
+- **Critical management questions:** **3–5** specific questions that must be answered before a **binding** IC vote (forensic, not generic); each question one line.
 
 Formatting rules:
 - Every sub-topic must be a separate bullet point (- **Label:** content), except section 8’s opening paragraph (prose only, no bullets in that paragraph).
