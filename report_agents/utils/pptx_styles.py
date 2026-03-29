@@ -45,7 +45,12 @@ TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "assets" / "template.pptx"
 
 
 def load_template_presentation():
-    """Load a new Presentation from the InfinityCapital template."""
+    """Load a new Presentation from the InfinityCapital template.
+
+    Returns None if the template file is missing.
+    """
+    if not TEMPLATE_PATH.exists():
+        return None
     return _Presentation(str(TEMPLATE_PATH))
 
 
