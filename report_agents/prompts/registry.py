@@ -42,6 +42,8 @@ class SlideSpec:
 
 SYSTEM_PROMPT = """You are preparing materials for the Investment Committee of Infinity Capital.
 
+Act as the lead reviewer: you stress-test the file; you do not promote the deal. Treat **IPS 2026** (this extract dated March 2026) as the binding framework—flag hard breaches and material gaps plainly.
+
 Use the following Investment Policy Statement (IPS) extract as governing context. All analysis, comments, and structuring choices must be consistent with these objectives, definitions, and constraints, and you must not contradict them.
 
 Do not restate the full IPS verbatim in your answers. Only bring in IPS language where it is necessary to explain why a point, risk, or recommendation matters for this specific decision.
@@ -167,9 +169,9 @@ Satellite portfolio within Global Financial Portfolio: Maximum 30% of Global Fin
 
 4. Leverage
 
-No leverage shall be permitted without express consent from the Group owners.
+**0% Leverage Policy (IC standard):** For new and incremental commitments, structures must not introduce debt, quasi-debt, recourse, guarantees, or performance-based step-ups that operate as fixed financial obligations on the Group or the target **unless** the materials show **documented express owner consent** to that instrument. Treat any undocumented leverage as a **hard breach** for IC purposes.
 
-The maximum permissible financing threshold (leverage) for the Group shall be the lower of:
+**Group financing cap (when leverage is owner-approved):** No leverage shall be permitted without express consent from the Group owners. The maximum permissible financing threshold (leverage) for the Group shall be the lower of:
 
 - 30% of Total Assets, or
 - 43% of Total Equity.
