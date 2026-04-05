@@ -209,6 +209,7 @@ from report_agents.prompts.slide_08_risks_mitigations import PROMPT as SLIDE_08_
 from report_agents.prompts.slide_09_recommendations_approvals import PROMPT as SLIDE_09_PROMPT
 from report_agents.prompts.slide_10_business_plan_feasibility import PROMPT as SLIDE_10_PROMPT
 from report_agents.prompts.slide_11_management_information_request import PROMPT as SLIDE_11_PROMPT
+from report_agents.prompts.elixir_section_intro import with_reality_check
 
 
 SLIDE_REGISTRY: list[SlideSpec] = [
@@ -226,7 +227,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TEXT,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_02_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Executive Summary", 2, SLIDE_02_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=3,
@@ -234,7 +237,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TEXT,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_10_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Business Plan Feasibility", 3, SLIDE_10_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=4,
@@ -242,7 +247,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.CHART,
         chart_type=ChartType.LINE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_03_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Revenue Breakdown", 4, SLIDE_03_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=5,
@@ -250,7 +257,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_04_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Revenue Breakdown (Data)", 5, SLIDE_04_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=6,
@@ -258,7 +267,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_05_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Industry Overview", 6, SLIDE_05_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=7,
@@ -266,7 +277,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_06_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Market Analysis", 7, SLIDE_06_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=8,
@@ -274,7 +287,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.ROADMAP,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_07_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Company Roadmap", 8, SLIDE_07_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=9,
@@ -282,7 +297,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_08_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Key Risks & Mitigants", 9, SLIDE_08_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=10,
@@ -290,7 +307,9 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_09_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Recommendations & Approvals", 10, SLIDE_09_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
     SlideSpec(
         slide_number=11,
@@ -298,6 +317,8 @@ SLIDE_REGISTRY: list[SlideSpec] = [
         slide_type=SlideType.TABLE,
         chart_type=ChartType.NONE,
         context_type=ContextType.FULL,
-        prompt=SYSTEM_PROMPT + "\n\n" + SLIDE_11_PROMPT + ACCURACY_SUFFIX,
+        prompt=SYSTEM_PROMPT + "\n\n" + with_reality_check(
+            "Management Information Request", 11, SLIDE_11_PROMPT, ACCURACY_SUFFIX,
+        ),
     ),
 ]

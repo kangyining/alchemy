@@ -33,6 +33,9 @@ from report_agents.utils.state_keys import slide_content_key, slide_chart_image_
 
 logger = logging.getLogger(__name__)
 
+MARKER_REALITY = "<<<CIO_REALITY_CHECK>>>"
+MARKER_BODY = "<<<SECTION_CONTENT>>>"
+
 
 # PDF HTML template
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -132,6 +135,31 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     bottom: 0in;
     height: 100px;
   }
+
+  .two-col {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    margin-top: 0.06in;
+  }
+  .col-reality {
+    display: table-cell;
+    width: 32%;
+    vertical-align: top;
+    padding-right: 0.18in;
+    border-right: 1pt solid var(--grid);
+    font-size: 10pt;
+    line-height: 1.35;
+  }
+  .col-reality p { font-size: 10pt; }
+  .col-reality li { font-size: 10pt; }
+  .col-main {
+    display: table-cell;
+    width: 68%;
+    vertical-align: top;
+    padding-left: 0.22in;
+  }
+  .col-main .roadmap-chart img { max-width: 100%; }
 </style>
 </head>
 <body>
@@ -155,11 +183,25 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
     {% if not section.is_chart_only %}
     <div class="title-bar">{{ section.title }}</div>
     {% endif %}
+    {% if section.use_split_layout %}
+    <div class="two-col">
+      <div class="col-reality">{{ section.html_reality }}</div>
+      <div class="col-main">
+        {{ section.html_content }}
+        {% if section.chart_img %}
+        <div{% if section.is_roadmap %} class="roadmap-chart"{% endif %}>
+        <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart"/>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
     {{ section.html_content }}
     {% if section.chart_img %}
     <div{% if section.is_roadmap %} class="roadmap-chart"{% endif %}>
     <img src="data:image/png;base64,{{ section.chart_img }}" alt="Chart"/>
     </div>
+    {% endif %}
     {% endif %}
     {% endif %}
   </div>
@@ -195,6 +237,17 @@ def _strip_code_fences(md_text: str) -> str:
     if text.rstrip().endswith("```"):
         text = text.rstrip()[:-3].rstrip()
     return text
+
+
+def _split_reality_and_body(md_text):
+    """Split Elixir output into Reality Check (left column) and section body (right)."""
+    if MARKER_REALITY not in md_text or MARKER_BODY not in md_text:
+        return "", md_text
+    _, rest = md_text.split(MARKER_REALITY, 1)
+    if MARKER_BODY not in rest:
+        return "", md_text
+    reality_part, body_part = rest.split(MARKER_BODY, 1)
+    return reality_part.strip(), body_part.strip()
 
 
 def _extract_cover_lines(md_text: str) -> tuple[str, str]:
@@ -319,7 +372,12 @@ async def assemble_report(
         content = _strip_bold_from_sources(content)
         if spec.slide_number == 1:
             content = _inject_cover_date(content)
-        pptx_content = content
+
+        reality_md, body_md = ("", content)
+        if spec.slide_number != 1:
+            reality_md, body_md = _split_reality_and_body(content)
+
+        pptx_content = body_md
         cover_logo_png = None
         infinity_logo_png = None
         cover_date_line = ""
@@ -354,21 +412,19 @@ async def assemble_report(
             else:
                 break
 
-        remaining = ""
-        if spec.slide_number != 1:
-            add_title_bar(slide, spec.title)
+        use_split = spec.slide_number != 1 and bool(reality_md.strip())
+        left_w = Inches(10.75 / 3)
+        col_gap = Inches(0.12)
+        right_left = CONTENT_LEFT + left_w + col_gap
+        right_w = CONTENT_WIDTH - left_w - col_gap
 
-        if spec.slide_number == 1:
-            date_y = Inches(0.7)
-            logo_y = SLIDE_HEIGHT - Inches(0.9)
-            title_height = Inches(0.6)
-            title_y = int((date_y + logo_y - title_height) / 2)
         # --- Build PPTX slide (skip if template not available) ---
         if prs is not None:
             slide_layout = prs.slide_layouts[17]  # Blank layout
             slide = prs.slides.add_slide(slide_layout)
 
             remaining = ""
+            rem_reality = ""
             if spec.slide_number != 1:
                 add_title_bar(slide, spec.title)
 
@@ -396,6 +452,39 @@ async def assemble_report(
                 title_tf.paragraphs[0].font.bold = True
                 title_tf.paragraphs[0].font.color.rgb = ACCENT_COLOR
                 title_tf.paragraphs[0].font.name = "Arial"
+            elif use_split:
+                rem_reality = render_markdown_to_textbox(
+                    slide, reality_md,
+                    left=CONTENT_LEFT, top=CONTENT_TOP,
+                    width=left_w, height=CONTENT_HEIGHT,
+                )
+                if spec.slide_type == SlideType.ROADMAP and chart_bytes:
+                    img_stream = io.BytesIO(chart_bytes)
+                    slide.shapes.add_picture(
+                        img_stream,
+                        right_left, CONTENT_TOP,
+                        right_w, CONTENT_HEIGHT,
+                    )
+                elif spec.slide_type == SlideType.CHART and chart_bytes:
+                    img_stream = io.BytesIO(chart_bytes)
+                    slide.shapes.add_picture(
+                        img_stream,
+                        right_left, CONTENT_TOP,
+                        right_w, Inches(4.2),
+                    )
+                    chart_sources = _extract_sources_only(pptx_content)
+                    if chart_sources:
+                        remaining = render_markdown_to_textbox(
+                            slide, chart_sources,
+                            left=right_left, top=Inches(5.65),
+                            width=right_w, height=Inches(1.35),
+                        )
+                else:
+                    remaining = render_markdown_to_textbox(
+                        slide, pptx_content,
+                        left=right_left, top=CONTENT_TOP,
+                        width=right_w, height=CONTENT_HEIGHT,
+                    )
             elif spec.slide_type == SlideType.ROADMAP and chart_bytes:
                 img_stream = io.BytesIO(chart_bytes)
                 slide.shapes.add_picture(
@@ -455,10 +544,25 @@ async def assemble_report(
                 logo_shape.left = int(SLIDE_WIDTH - logo_shape.width - logo_margin)
                 logo_shape.top = int(SLIDE_HEIGHT - logo_shape.height - logo_margin)
 
+            while rem_reality:
+                cont_slide = prs.slides.add_slide(slide_layout)
+                add_title_bar(cont_slide, spec.title + " (cont.)")
+                rem_reality = render_markdown_to_textbox(
+                    cont_slide, rem_reality,
+                    left=CONTENT_LEFT, top=CONTENT_TOP,
+                    width=CONTENT_WIDTH, height=CONTENT_HEIGHT,
+                )
+
+            cont_left = right_left if use_split else CONTENT_LEFT
+            cont_width = right_w if use_split else CONTENT_WIDTH
             while remaining:
                 cont_slide = prs.slides.add_slide(slide_layout)
                 add_title_bar(cont_slide, spec.title + " (cont.)")
-                remaining = render_markdown_to_textbox(cont_slide, remaining)
+                remaining = render_markdown_to_textbox(
+                    cont_slide, remaining,
+                    left=cont_left, top=CONTENT_TOP,
+                    width=cont_width, height=CONTENT_HEIGHT,
+                )
 
             for page_idx, extra_chart in enumerate(extra_chart_bytes_list, start=2):
                 cont_slide = prs.slides.add_slide(slide_layout)
@@ -472,12 +576,20 @@ async def assemble_report(
                 )
 
         # --- Build PDF section ---
-        # Roadmap slides only show the chart image, no text/table
-        # Chart slides only show sources below the chart
+        html_reality = ""
+        if reality_md.strip():
+            html_reality = md_lib.markdown(
+                reality_md,
+                extensions=["tables", "fenced_code"],
+            )
+        use_split_layout = use_split and bool(html_reality.strip())
+
+        # Roadmap slides only show the chart image in the body column, no table text
+        # Chart slides only show sources below the chart (from body_md)
         if spec.slide_type == SlideType.ROADMAP and chart_bytes:
             html_content = ""
         elif spec.slide_type == SlideType.CHART and chart_bytes:
-            sources_md = _extract_sources_only(content)
+            sources_md = _extract_sources_only(body_md)
             if sources_md:
                 html_content = md_lib.markdown(sources_md, extensions=["tables", "fenced_code"])
                 html_content = _wrap_sources_section(html_content)
@@ -485,7 +597,7 @@ async def assemble_report(
                 html_content = ""
         else:
             html_content = md_lib.markdown(
-                content,
+                body_md,
                 extensions=["tables", "fenced_code"],
             )
             html_content = _wrap_sources_section(html_content)
@@ -501,6 +613,8 @@ async def assemble_report(
         pdf_sections.append({
             "title": spec.title,
             "html_content": html_content,
+            "html_reality": html_reality,
+            "use_split_layout": use_split_layout,
             "chart_img": chart_img_b64,
             "is_cover": spec.slide_number == 1,
             "is_chart_only": False,
@@ -518,6 +632,8 @@ async def assemble_report(
             pdf_sections.append({
                 "title": "",  # No title bar needed
                 "html_content": "",  # Chart-only continuation page
+                "html_reality": "",
+                "use_split_layout": False,
                 "chart_img": extra_chart_b64,
                 "is_cover": False,
                 "is_chart_only": True,  # Skip title bar rendering
