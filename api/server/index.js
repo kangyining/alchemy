@@ -116,6 +116,9 @@ const startServer = async () => {
       });
       return;
     }
+    /* Disable timeouts for SSE streaming — report generation can take many minutes */
+    req.setTimeout(0);
+    res.setTimeout(0);
     const parsed = new URL(reportAgentTarget);
     const isHttps = parsed.protocol === 'https:';
     const targetPath = req.originalUrl.replace(/^\/report-agent-api/, '') || '/';
@@ -152,6 +155,7 @@ const startServer = async () => {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
       proxyRes.pipe(res, { end: true });
     });
+    proxyReq.setTimeout(0);
     proxyReq.on('error', (err) => {
       const detail =
         (err && (err.message || err.code || String(err))) || 'Unknown proxy error (no error object)';
