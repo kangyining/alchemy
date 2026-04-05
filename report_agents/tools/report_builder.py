@@ -1,6 +1,7 @@
 """Report assembly: builds PPTX and PDF from slide agent outputs."""
 
 import base64
+import html as html_escape
 import io
 import json
 import logging
@@ -153,6 +154,12 @@ PDF_TEMPLATE = Template("""<!DOCTYPE html>
   }
   .col-reality p { font-size: 10pt; }
   .col-reality li { font-size: 10pt; }
+  .col-reality ul.elixir-reality {
+    margin: 0 0 10px 0;
+    padding-left: 1.1em;
+    list-style-type: disc;
+  }
+  .col-reality ul.elixir-reality li { margin: 6px 0; }
   .col-main {
     display: table-cell;
     width: 68%;
@@ -248,6 +255,134 @@ def _split_reality_and_body(md_text):
         return "", md_text
     reality_part, body_part = rest.split(MARKER_BODY, 1)
     return reality_part.strip(), body_part.strip()
+
+
+def _normalize_elixir_reality_markdown(md_text):
+    """Put inline pseudo-bullets on their own lines.
+
+    Markdown and the PPTX renderer only treat ``- `` / ``* `` as lists when they
+    start a line. Models often emit one long line: thesis then ``- **A:**`` …
+    ``- **B:**`` with no newlines between bullets.
+
+    Important: patterns must capture the full ``**Label:**`` chip. Using ``(\\*\\*)``
+    alone only matches two stars, which used to leave ``Cash burn reality:**`` stuck
+    on the prior line and broke list detection.
+    """
+    if not md_text or not md_text.strip():
+        return md_text
+    text = md_text
+    hy = r"[\-–]"
+    # ``**Some label:**`` — no asterisks inside the label text
+    chip = r"\*\*[^*]+:\*\*"
+
+    def _bold_hyphen_bullet(m):
+        label = m.group(1).strip()
+        if not label:
+            return m.group(0)
+        return "\n- **" + label + ":**"
+
+    text = re.sub(rf"\*\*\s*{hy}\s*([^*]+):\*\*", _bold_hyphen_bullet, text)
+    # ``**thesis** - **Bullet:**`` (close-bold then hyphen bullet)
+    text = re.sub(rf"(\*\*)\s*{hy}\s*({chip})", r"\1\n- \2", text)
+    # ``...sentence. - **Bullet:`` (period/question/exclaim then hyphen bullet)
+    text = re.sub(rf"([.!?])\s*{hy}\s*({chip})", r"\1\n- \2", text)
+    # Chained / ``2023 - **Cash burn reality:**`` (space-hyphen-space full chip)
+    text = re.sub(rf"\s+{hy}\s*({chip})", r"\n- \1", text)
+    # Asterisk list variant: `` * **Label:**`` (not ``** * **``)
+    text = re.sub(rf"(?<!\*) \* ({chip})", r"\n* \1", text)
+    # Plain `` - Valuation disconnect:`` (bold only in PDF, no ``**`` in source)
+    text = re.sub(
+        rf"\s+{hy}\s+([A-Z][^:\n]{{0,120}}:)(?=\s|$)",
+        r"\n- \1",
+        text,
+    )
+    # Blank line before first list row helps other consumers; PDF uses structured HTML too.
+    _lis = re.compile(r"^[-*+]\s+")
+    lines = text.split("\n")
+    out = []
+    for line in lines:
+        s = line.strip()
+        if _lis.match(s) and out and out[-1].strip():
+            prev = out[-1].strip()
+            if not _lis.match(prev):
+                out.append("")
+        out.append(line)
+    return "\n".join(out)
+
+
+def _reality_caps_label(label):
+    return " ".join(w.upper() for w in label.split())
+
+
+def _reality_li_inner_html(item_md):
+    """Turn one list line body (after ``- ``) into HTML for PDF left column."""
+    item_md = item_md.strip()
+    if not item_md:
+        return ""
+    m = re.match(r"^\*\*([^*]+):\*\*\s*(.*)$", item_md, re.DOTALL)
+    if m:
+        raw_label, rest = m.group(1).strip(), m.group(2)
+        ulab = _reality_caps_label(raw_label)
+        return (
+            f"<strong>{html_escape.escape(ulab)}:</strong> "
+            f"{html_escape.escape(rest)}"
+        )
+    m2 = re.match(r"^([^:]+):\s*(.*)$", item_md, re.DOTALL)
+    if m2:
+        raw_label, rest = m2.group(1).strip(), m2.group(2)
+        ulab = _reality_caps_label(raw_label)
+        return (
+            f"<strong>{html_escape.escape(ulab)}:</strong> "
+            f"{html_escape.escape(rest)}"
+        )
+    frag = md_lib.markdown(item_md, extensions=[]).strip()
+    if frag.startswith("<p>") and frag.endswith("</p>"):
+        frag = frag[3:-4].strip()
+    return frag
+
+
+def _reality_md_to_pdf_html(md_text):
+    """Build left-column HTML explicitly so lists are never folded into one <p>.
+
+    ``markdown.markdown`` often leaves ``- Label:`` segments inside a single paragraph
+    when they sit on one line with bold thesis text; PPTX is line-based and still
+    breaks correctly. This path emits real ``<ul><li>`` blocks and uppercases labels.
+    """
+    md_text = _normalize_elixir_reality_markdown(md_text)
+    lines = md_text.split("\n")
+    out = []
+    i = 0
+    n = len(lines)
+    _list_start = re.compile(r"^[-*+]\s+")
+
+    while i < n:
+        if not lines[i].strip():
+            i += 1
+            continue
+        s = lines[i].strip()
+        if _list_start.match(s):
+            items = []
+            while i < n:
+                t = lines[i].strip()
+                if not t or not _list_start.match(t):
+                    break
+                body = _list_start.sub("", t, count=1).strip()
+                items.append(f"<li>{_reality_li_inner_html(body)}</li>")
+                i += 1
+            out.append('<ul class="elixir-reality">\n' + "\n".join(items) + "\n</ul>")
+        else:
+            block = []
+            while i < n and lines[i].strip():
+                t = lines[i].strip()
+                if _list_start.match(t):
+                    break
+                block.append(t)
+                i += 1
+            para = " ".join(block)
+            chunk = md_lib.markdown(para, extensions=[]).strip()
+            if chunk:
+                out.append(chunk)
+    return "\n".join(out)
 
 
 def _extract_cover_lines(md_text: str) -> tuple[str, str]:
@@ -376,6 +511,8 @@ async def assemble_report(
         reality_md, body_md = ("", content)
         if spec.slide_number != 1:
             reality_md, body_md = _split_reality_and_body(content)
+            if reality_md.strip():
+                reality_md = _normalize_elixir_reality_markdown(reality_md)
 
         pptx_content = body_md
         cover_logo_png = None
@@ -578,10 +715,7 @@ async def assemble_report(
         # --- Build PDF section ---
         html_reality = ""
         if reality_md.strip():
-            html_reality = md_lib.markdown(
-                reality_md,
-                extensions=["tables", "fenced_code"],
-            )
+            html_reality = _reality_md_to_pdf_html(reality_md)
         use_split_layout = use_split and bool(html_reality.strip())
 
         # Roadmap slides only show the chart image in the body column, no table text
