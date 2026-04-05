@@ -593,7 +593,9 @@ export default function ReportAgentPage() {
         <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700/80 dark:bg-gray-800/80">
           <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-gray-700/50 dark:bg-gray-800/50">
             <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Upload Documents</h2>
-            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Supported: PDF, DOCX, XLSX, CSV</p>
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+              Supported: PDF, DOCX, XLSX, CSV, PPTX
+            </p>
           </div>
           <div className="space-y-4 p-6">
             <label
@@ -621,7 +623,7 @@ export default function ReportAgentPage() {
               <input
                 type="file"
                 multiple
-                accept=".pdf,.docx,.xlsx,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv"
+                accept=".pdf,.docx,.xlsx,.csv,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 onChange={handleFileChange}
                 disabled={running}
                 className="hidden"
