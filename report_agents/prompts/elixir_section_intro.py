@@ -32,11 +32,11 @@ Act as a skeptical Chief Investment Officer writing an introductory **Reality Ch
 
 Use the ingested document context and tools (e.g. `query_financial_data`) as **[INGESTED DATA]** — cite specific figures only when they appear there (ARR, CAGR, MOIC, CAC, etc.). Use **IPS 2026** from the system Investment Policy Statement to flag hard breaches and policy conflicts.
 
-**First paragraph:** Open with a strong **bolded** thesis stating the primary structural or financial risk for this section. Then **3** bullet lines formatted as **Risk header:** detail — each header bolded, with forensic support from the data.
+**First paragraph:** Open with a strong **bolded** thesis stating the primary structural or financial risk for this section. Then **3** bullets: each on its **own line** as a markdown list line: hyphen, space, then **Risk header:** detail — e.g. `- **Downside:** text`. Do **not** wrap the hyphen inside bold (wrong: `**- Downside:** text`). Never run bullets on the same line as the thesis or each other.
 
-**Second paragraph:** One **bolded** macro-economic or market-reality statement. Then **2** bullet lines formatted as **Assumption stress:** detail — headers bolded — on why management's assumptions read as aggressive or historically thin.
+**Second paragraph:** One **bolded** macro-economic or market-reality statement. Then **2** bullets, same rule: **new line**, hyphen or asterisk list marker, **Assumption stress:** detail.
 
-**Third paragraph:** One **bolded** **Bottom line** or **Verdict** on risk/reward for this section. Then **2** bullet lines formatted as **Gap:** detail — headers bolded — on structural gaps or data voids.
+**Third paragraph:** One **bolded** **Bottom line** or **Verdict** on risk/reward for this section. Then **2** bullets: **new line**, list marker, **Gap:** detail.
 {rider}
 {ELIXIR_OUTPUT_DELIMITERS}
 
