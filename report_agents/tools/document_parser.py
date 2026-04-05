@@ -10,9 +10,15 @@ from typing import Optional
 
 import pandas as pd
 from dotenv import load_dotenv
+from google import genai
 from google.cloud import documentai_v1 as documentai
 from google.genai import types as genai_types
+from PIL import Image
+from pptx import Presentation
+from pptx.shapes.picture import Picture
 from pypdf import PdfReader, PdfWriter
+
+from report_agents.utils.gemini_models import GEMINI_MODEL
 
 load_dotenv()
 
@@ -272,6 +278,27 @@ _SPREADSHEET_MIME_TYPES = {
     "text/csv",
 }
 
+# MIME types that should be parsed via native PPTX parser + Gemini Vision
+_PPTX_MIME_TYPES = {
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+}
+
+# Max concurrent Gemini Vision requests for slide images
+_PPTX_VISION_MAX_CONCURRENCY = 5
+
+# Prompt sent to Gemini Flash for each slide image
+_PPTX_VISION_PROMPT = (
+    "Extract ALL visible text from this presentation slide image. "
+    "Include titles, subtitles, bullet points, labels, footnotes, "
+    "and any text inside charts or tables. "
+    "For tables, reproduce them in markdown table format. "
+    "For charts, describe the data series, values, and axis labels. "
+    "Return only the extracted content, no commentary."
+)
+
+# Max megapixels before downscaling slide images for Gemini
+_PPTX_IMAGE_MAX_MEGAPIXELS = 4
+
 # Max rows per sheet to include in markdown output (prevent token explosion)
 _MAX_ROWS_PER_SHEET = 1500
 
@@ -412,6 +439,153 @@ def _parse_spreadsheet(
     return text_sections, tables, dataframes, unit_notes
 
 
+# ---------------------------------------------------------------------------
+# PPTX native parsing with Gemini Vision
+# ---------------------------------------------------------------------------
+
+
+def _extract_slide_content(
+    slide, slide_index: int,
+) -> tuple[str, list[tuple[bytes, str]]]:
+    """Extract text and images from a single PPTX slide.
+
+    Returns (text, list_of_(image_bytes, mime_type) tuples).
+    Skips images smaller than 1 KB (icons/decorations).
+    """
+    text_parts: list[str] = []
+    images: list[tuple[bytes, str]] = []
+
+    for shape in slide.shapes:
+        # Extract text from text frames
+        if shape.has_text_frame:
+            for paragraph in shape.text_frame.paragraphs:
+                line = paragraph.text.strip()
+                if line:
+                    text_parts.append(line)
+
+        # Extract images from Picture shapes
+        if isinstance(shape, Picture):
+            image_blob = shape.image.blob
+            if len(image_blob) < 1024:
+                continue  # Skip tiny icons/decorations
+            content_type = shape.image.content_type or "image/png"
+            images.append((image_blob, content_type))
+
+    return "\n".join(text_parts), images
+
+
+def _maybe_resize_image(image_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
+    """Downscale image if it exceeds _PPTX_IMAGE_MAX_MEGAPIXELS.
+
+    Returns (possibly resized bytes, mime_type).
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        megapixels = (img.width * img.height) / 1_000_000
+        if megapixels <= _PPTX_IMAGE_MAX_MEGAPIXELS:
+            return image_bytes, mime_type
+        scale = (_PPTX_IMAGE_MAX_MEGAPIXELS / megapixels) ** 0.5
+        new_w = int(img.width * scale)
+        new_h = int(img.height * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue(), "image/png"
+    except Exception:
+        return image_bytes, mime_type
+
+
+async def _describe_image_with_vision(
+    image_bytes: bytes,
+    mime_type: str,
+    slide_index: int,
+    semaphore: asyncio.Semaphore,
+) -> str:
+    """Send a slide image to Gemini Flash vision and return extracted text."""
+    async with semaphore:
+        try:
+            image_bytes, mime_type = _maybe_resize_image(image_bytes, mime_type)
+            client = genai.Client()
+            response = await client.aio.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[
+                    genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    _PPTX_VISION_PROMPT,
+                ],
+            )
+            return response.text or ""
+        except Exception as e:
+            logger.warning(
+                "Gemini vision failed for slide %d image: %s", slide_index + 1, e,
+            )
+            return ""
+
+
+async def _parse_pptx(
+    name: str, file_bytes: bytes,
+) -> tuple[list[dict], list[dict], dict[str, pd.DataFrame], dict[str, str]]:
+    """Parse a PPTX file using python-pptx + Gemini Flash vision.
+
+    Phase 1: Extract direct text and images from all slides (sync, fast).
+    Phase 2: Send images to Gemini Vision concurrently.
+    Phase 3: Combine results into text_sections.
+
+    Returns (text_sections, [], {}, {}) — same 4-tuple as _parse_spreadsheet.
+    """
+    text_sections: list[dict] = []
+
+    try:
+        prs = Presentation(io.BytesIO(file_bytes))
+    except Exception as e:
+        logger.error("Failed to open PPTX %s: %s", name, e)
+        return text_sections, [], {}, {}
+
+    # Phase 1: extract text + images from each slide
+    slide_data: list[tuple[str, list[tuple[bytes, str]]]] = []
+    total_images = 0
+    for i, slide in enumerate(prs.slides):
+        text, images = _extract_slide_content(slide, i)
+        slide_data.append((text, images))
+        total_images += len(images)
+
+    # Phase 2: send all images to Gemini Vision concurrently
+    semaphore = asyncio.Semaphore(_PPTX_VISION_MAX_CONCURRENCY)
+    vision_tasks: list[tuple[int, int, asyncio.Task]] = []  # (slide_idx, img_idx, task)
+    for slide_idx, (_, images) in enumerate(slide_data):
+        for img_idx, (img_bytes, img_mime) in enumerate(images):
+            task = asyncio.create_task(
+                _describe_image_with_vision(img_bytes, img_mime, slide_idx, semaphore)
+            )
+            vision_tasks.append((slide_idx, img_idx, task))
+
+    vision_results: dict[int, list[str]] = {}
+    if vision_tasks:
+        results = await asyncio.gather(*(t for _, _, t in vision_tasks))
+        for (slide_idx, _, _), result_text in zip(vision_tasks, results):
+            vision_results.setdefault(slide_idx, []).append(result_text)
+
+    # Phase 3: combine direct text + vision text per slide
+    for slide_idx, (direct_text, _) in enumerate(slide_data):
+        parts: list[str] = []
+        if direct_text:
+            parts.append(direct_text)
+        for vision_text in vision_results.get(slide_idx, []):
+            if vision_text.strip():
+                parts.append(vision_text.strip())
+
+        if parts:
+            content = f"[Slide {slide_idx + 1}]\n" + "\n".join(parts)
+            text_sections.append({"source": name, "content": content})
+
+    images_processed = sum(1 for r in results if r.strip()) if vision_tasks else 0
+    logger.info(
+        "Parsed PPTX %s: %d slide(s), %d text section(s), %d images processed via vision",
+        name, len(prs.slides), len(text_sections), images_processed,
+    )
+
+    return text_sections, [], {}, {}
+
+
 def _split_pdf(
     filename: str, pdf_bytes: bytes,
 ) -> list[tuple[str, bytes]]:
@@ -493,6 +667,20 @@ async def _process_single_file(
             )
             document = result.document
 
+            # Debug: log what Document AI returned
+            num_pages = len(document.pages) if document.pages else 0
+            text_len = len(document.text) if document.text else 0
+            num_chunks = len(document.chunked_document.chunks) if document.chunked_document and document.chunked_document.chunks else 0
+            logger.info(
+                "DocAI response for %s: pages=%d, text_len=%d, chunks=%d, mime=%s",
+                name, num_pages, text_len, num_chunks, mime_type,
+            )
+            if num_pages == 0 and text_len == 0:
+                logger.warning(
+                    "DocAI returned empty content for %s — file may contain only images/graphics",
+                    name,
+                )
+
             text_sections: list[dict] = []
             if document.chunked_document and document.chunked_document.chunks:
                 for chunk in document.chunked_document.chunks:
@@ -548,12 +736,16 @@ async def parse_documents(
             "parsed_tables_json": "[]",
         }
 
-    # 1. Separate spreadsheets (native parsing) from other files (Document AI)
+    # 1. Separate files by parser: spreadsheets (pandas), PPTX (native+vision), rest (Document AI)
     docai_files: list[tuple[str, bytes, str]] = []
     spreadsheet_files: list[tuple[str, bytes, str]] = []
+    pptx_files: list[tuple[str, bytes, str]] = []
     for name, file_bytes, mime_type in files:
+        logger.info("Routing file %s (mime=%s, size=%d bytes)", name, mime_type, len(file_bytes))
         if mime_type in _SPREADSHEET_MIME_TYPES:
             spreadsheet_files.append((name, file_bytes, mime_type))
+        elif mime_type in _PPTX_MIME_TYPES:
+            pptx_files.append((name, file_bytes, mime_type))
         else:
             docai_files.append((name, file_bytes, mime_type))
 
@@ -575,7 +767,13 @@ async def parse_documents(
             if sheet_name in unit_notes:
                 all_unit_notes[key] = unit_notes[sheet_name]
 
-    # 2b. Process remaining files via Document AI
+    # 2b. Parse PPTX files natively with Gemini Vision
+    for name, file_bytes, mime_type in pptx_files:
+        text_sections, tables, dataframes, unit_notes = await _parse_pptx(name, file_bytes)
+        all_text_sections.extend(text_sections)
+        all_tables.extend(tables)
+
+    # 2c. Process remaining files via Document AI
     if docai_files:
         client = _get_docai_client()
         processor_name = (

@@ -13,7 +13,7 @@ from google import genai
 from google.adk.tools import ToolContext
 
 from report_agents.services.database_service import FinancialDataStore
-from report_agents.utils.gemini_models import GEMINI_PRO_MODEL
+from report_agents.utils.gemini_models import GEMINI_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ async def _generate_sql(schema: str, question: str) -> str:
     prompt = SQL_GENERATION_PROMPT.format(schema=schema, question=question)
 
     response = await client.aio.models.generate_content(
-        model=GEMINI_PRO_MODEL,
+        model=GEMINI_MODEL,
         contents=prompt,
     )
 
