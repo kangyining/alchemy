@@ -1,8 +1,10 @@
 import { memo, useCallback, lazy, Suspense } from 'react';
+import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRecoilValue } from 'recoil';
 import { QueryKeys } from 'librechat-data-provider';
 import { Skeleton, Sidebar, Button, TooltipAnchor, NewChatIcon } from '@librechat/client';
+import { FileBarChart } from 'lucide-react';
 import type { NavLink } from '~/common';
 import { CLOSE_SIDEBAR_ID } from '~/components/Chat/Menus/OpenSidebar';
 import { useActivePanel, resolveActivePanel } from '~/Providers';
@@ -158,7 +160,20 @@ function ExpandedPanel({
         ))}
       </div>
 
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col gap-1">
+        <TooltipAnchor
+          side="right"
+          description="Generate Report"
+          render={
+            <Link
+              to="/report"
+              aria-label="Generate Report"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+            >
+              <FileBarChart className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          }
+        />
         <Suspense fallback={<Skeleton className="h-9 w-9 rounded-lg" />}>
           <AccountSettings collapsed />
         </Suspense>

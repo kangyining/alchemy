@@ -362,48 +362,24 @@ endpoints:
   #     modelDisplayLabel: 'Portkey'
   #     iconURL: https://images.crunchbase.com/image/upload/c_pad,f_auto,q_auto:eco,dpr_1/rjqy7ghvjoiu4cd1xjbf
 
-# System-wide presets for all users - Multiple options
+# Single model preset — model selector shows only this (no raw OpenAI/Assistants/Google/Plugins rows)
 modelSpecs:
+  enforce: true
+  prioritize: true
+  # Only allow endpoints in this list in the selector; use a non-existent id so no provider rows appear (only modelSpecs above).
+  addedEndpoints:
+    - "__model_specs_only__"
   list:
-    # Default preset - Gemini 3 Flash (Fastest & Cheapest)
-    - name: "gemini-3"
-      label: "Elixir"
-      description: "Gemini 3 (Fastest)"
-      default: true  # This makes it the default for all users on login
+    - name: "elixir-deep-search-pro-gemini-3"
+      label: "Elixir (Gemini 3.1 Pro)"
+      description: "Gemini 3.1 Pro with Google Search and extended thinking"
+      default: true
       preset:
         endpoint: "google"
-        model: "gemini-3-flash-preview"
-        web_search: false
-        thinking: false
-    
-    # Gemini 3 Flash with Google Search - Budget-friendly research
-    - name: "gemini-3-search"
-      label: "Elixir (Search)"
-      description: "Gemini 3 with Google Search"
-      preset:
-        endpoint: "google"
-        model: "gemini-3-flash-preview"
+        model: "gemini-3.1-pro-preview"
         web_search: true
-        thinking: false
-    
-    - name: "gemini-3-deep-think"
-      label: "Elixir Deep Thinking"
-      description: "Gemini 3 Deep Thinking"
-      preset:
-        endpoint: "google"
-        model: "gemini-3-flash-preview"
-        web_search: false
         thinking: true
 
-    - name: "gemini-3-deep-think-search"
-      label: "Elixir Deep Thinking (Search)"
-      description: "Gemini 3 Deep Thinking with Google Search"
-      preset:
-        endpoint: "google"
-        model: "gemini-3-flash-preview"
-        web_search: true
-        thinking: true
-    
 # Example modelSpecs configuration showing grouping options
 # The 'group' field organizes model specs in the UI selector:
 # - If 'group' matches an endpoint name (e.g., "openAI", "groq"), the spec appears nested under that endpoint

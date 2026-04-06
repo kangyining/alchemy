@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, useMemo, memo, lazy, Suspense, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { FileBarChart } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSetRecoilState, useRecoilValue } from 'recoil';
 import { useMediaQuery, NewChatIcon } from '@librechat/client';
@@ -161,6 +163,14 @@ const ConversationsSection = memo(() => {
           setIsChatsExpanded={setIsChatsExpanded}
         />
       </div>
+      <Link
+        to="/report"
+        onClick={toggleNav}
+        className="mx-2 mt-1 flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-text-primary transition-colors hover:bg-surface-hover"
+      >
+        <FileBarChart className="h-4 w-4 flex-shrink-0 text-text-secondary" />
+        Generate Report
+      </Link>
     </div>
   );
 });
