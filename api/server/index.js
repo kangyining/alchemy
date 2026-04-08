@@ -161,6 +161,9 @@ const startServer = async () => {
         return;
       }
       options.headers = { ...options.headers, ...authHeaders };
+      if (process.env.REPORT_AGENT_API_KEY) {
+        options.headers['X-API-Key'] = process.env.REPORT_AGENT_API_KEY;
+      }
       logger.info('[report-agent-proxy] Attached GCP ID token for Cloud Run', {
         audience,
         path: targetPath,
