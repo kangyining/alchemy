@@ -6,7 +6,7 @@ import { InfinityCapitalChat, InfinityCapitalChatProps } from './inifinity-capit
 export interface AlchemyInfraStackProps extends cdk.StackProps {
   /**
    * Instance type for the InfinityCapitalChat EC2 instance
-   * @default t3.medium
+   * @default t4g.large (8 GiB RAM)
    */
   infinityCapitalChatInstanceType?: ec2.InstanceType;
 }

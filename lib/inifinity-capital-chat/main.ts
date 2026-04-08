@@ -11,7 +11,7 @@ export interface InfinityCapitalChatProps {
   vpc: ec2.IVpc;
   /**
    * Instance type for the EC2 instance
-   * @default t3.medium
+   * @default t4g.large (8 GiB RAM)
    */
   instanceType?: ec2.InstanceType;
 }
@@ -162,6 +162,7 @@ export class InfinityCapitalChat extends Construct {
       '    server_name alchemy-solutions.co www.alchemy-solutions.co;',
       '',
       '    location / {',
+      '        client_max_body_size 50M;',
       '        proxy_pass http://127.0.0.1:3080;',
       '        proxy_http_version 1.1;',
       '        proxy_set_header Upgrade \\$http_upgrade;',
@@ -198,7 +199,7 @@ export class InfinityCapitalChat extends Construct {
     // Create EC2 instance
     const instanceType = props.instanceType || ec2.InstanceType.of(
       ec2.InstanceClass.T4G,
-      ec2.InstanceSize.MEDIUM
+      ec2.InstanceSize.LARGE
     );
 
     this.instance = new ec2.Instance(this, 'InfinityCapitalChatInstance', {
