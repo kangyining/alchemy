@@ -43,6 +43,9 @@ ENV_VARS+=",DOCAI_PROCESSOR_ID=$DOCAI_PROCESSOR_ID"
 if [[ -n "${REPORTS_BUCKET:-}" ]]; then
     ENV_VARS+=",REPORTS_BUCKET=$REPORTS_BUCKET"
 fi
+if [[ -n "${API_KEY:-}" ]]; then
+    ENV_VARS+=",API_KEY=$API_KEY"
+fi
 
 echo "Deploying to Cloud Run with custom Dockerfile..."
 echo ""
