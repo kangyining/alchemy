@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useRecoilValue } from 'recoil';
+import store from '~/store';
 
 const APP_NAME = 'report_agents';
-const USER_ID = 'web-user';
 
 /** Base URL for report agent ADK. Uses same-origin /report-agent-api (server proxies to REPORT_AGENT_URL). Override with VITE_REPORT_AGENT_URL if needed. */
 function getReportAgentBaseUrl(): string {
@@ -30,6 +31,17 @@ type Step = {
 };
 
 type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'done' | 'error';
+
+type HistoryReport = {
+  run_id: string;
+  status: 'in_progress' | 'completed' | 'failed';
+  started_at: string;
+  completed_at?: string;
+  pdf_filename?: string;
+  error?: string;
+  title?: string;
+  message?: string;
+};
 
 const SUMMARY_MAX = 180;
 
@@ -84,52 +96,6 @@ function extractEventSummary(event: {
   return { summary: '', truncated: false };
 }
 
-function getInlineData(part: unknown): { data?: string; mimeType?: string } | undefined {
-  if (!part || typeof part !== 'object') return undefined;
-  const obj = part as Record<string, unknown>;
-  const inline =
-    (obj.inlineData as Record<string, unknown> | undefined) ??
-    (obj.inline_data as Record<string, unknown> | undefined);
-  if (!inline || typeof inline !== 'object') return undefined;
-  const data = inline.data as string | undefined;
-  const mimeType = (inline.mimeType as string | undefined) ?? (inline.mime_type as string | undefined);
-  return { data, mimeType };
-}
-
-function formatBase64Data(data: string, mimeType: string): string {
-  return `data:${mimeType};base64,${data}`;
-}
-
-function normalizeBase64(data: string): string {
-  const trimmed = data.trim();
-  let base64 = trimmed;
-  if (base64.startsWith('data:') && base64.includes(',')) {
-    base64 = base64.split(',')[1] ?? '';
-  }
-  base64 = base64.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
-  const pad = base64.length % 4;
-  if (pad === 2) base64 += '==';
-  else if (pad === 3) base64 += '=';
-  return base64;
-}
-
-function base64ToBlob(base64: string, mimeType: string): Blob {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: mimeType || 'application/octet-stream' });
-}
-
-function inferMimeTypeFromFilename(filename: string): string {
-  if (filename.endsWith('.pdf')) return 'application/pdf';
-  if (filename.endsWith('.pptx')) {
-    return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-  }
-  return 'application/octet-stream';
-}
-
 function coerceVersion(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
@@ -146,7 +112,6 @@ function getAuthorMeta(author: string): { label: string; isThrottle: boolean; sl
   if (author.startsWith('Throttle_') || author.startsWith('Throttle')) {
     return { label: 'Waiting', isThrottle: true };
   }
-  // ADK format: SlideAgent_{slide_number:02d}_{safe_title} (safe_title may use underscores for spaces)
   const slideMatch = author.match(/^SlideAgent_(\d+)_?(.*)$/);
   if (slideMatch?.[1]) {
     const num = Number.parseInt(slideMatch[1], 10);
@@ -194,25 +159,42 @@ function extractProgressFromStateDelta(state?: Record<string, unknown>): { curre
   return { current, total };
 }
 
+function formatReportDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function formatFileSize(bytes: number | undefined): string {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function ReportAgentPage() {
+  const currentUser = useRecoilValue(store.user);
+  const rawUserId = currentUser?.email ?? currentUser?.username ?? currentUser?.id ?? 'anonymous';
+  const userId = rawUserId.replace('@', '_');
+  const encodedUserId = encodeURIComponent(userId);
   const [files, setFiles] = useState<File[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
-  const [artifacts, setArtifacts] = useState<{ pptxVersion?: number; pdfVersion?: number }>({});
-  /** Eagerly prefetched artifact data (name -> base64 + mime) so download works after Cloud Run scales down. */
-  const [prefetchedArtifacts, setPrefetchedArtifacts] = useState<
-    Record<string, { data: string; mimeType: string }>
-  >({});
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>('idle');
   const [streamWarning, setStreamWarning] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<{ label: string; summary?: string } | null>(null);
   const [progress, setProgress] = useState<{ current?: number; total?: number }>({});
-  const [downloading, setDownloading] = useState<{ pptx: boolean; pdf: boolean }>({
-    pptx: false,
-    pdf: false,
-  });
+  const [history, setHistory] = useState<HistoryReport[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const pendingStepsRef = useRef<Step[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStreamedRef = useRef(false);
@@ -233,6 +215,49 @@ export default function ReportAgentPage() {
     progress.total && progress.current
       ? Math.min(100, Math.max(0, (progress.current / progress.total) * 100))
       : null;
+
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/reports/${encodedUserId}`);
+      if (res.ok) {
+        const data = (await res.json()) as HistoryReport[];
+        setHistory(data);
+      }
+    } catch {
+      // ignore — history is best-effort
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [apiBase, encodedUserId]);
+
+  // Load history on mount
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  // Refresh history when a run completes
+  useEffect(() => {
+    if (streamStatus === 'done') {
+      fetchHistory();
+    }
+  }, [streamStatus, fetchHistory]);
+
+  // Poll every 5s while any history entry is in_progress
+  useEffect(() => {
+    const hasInProgress = history.some((r) => r.status === 'in_progress');
+    if (!hasInProgress) return;
+    const interval = setInterval(fetchHistory, 5000);
+    return () => clearInterval(interval);
+  }, [history, fetchHistory]);
+
+  // Auto-poll every 5s while any run is in_progress
+  useEffect(() => {
+    const hasInProgress = history.some((r) => r.status === 'in_progress');
+    if (!hasInProgress) return;
+    const interval = setInterval(fetchHistory, 5000);
+    return () => clearInterval(interval);
+  }, [history, fetchHistory]);
 
   const readFileAsBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -277,89 +302,6 @@ export default function ReportAgentPage() {
     [flushPendingSteps],
   );
 
-  /** Eagerly fetch artifact via ADK GET and store in state so download works after instance scales down. */
-  const prefetchArtifact = useCallback(
-    async (sid: string, artifactName: string, version: number) => {
-      try {
-        const res = await fetch(
-          `${apiBase}/apps/${APP_NAME}/users/${USER_ID}/sessions/${sid}/artifacts/${encodeURIComponent(artifactName)}/versions/${version}`,
-        );
-        if (!res.ok) return;
-        const json = (await res.json()) as Record<string, unknown>;
-        const inline = getInlineData(json);
-        if (!inline?.data) return;
-        const mimeType = inline.mimeType || inferMimeTypeFromFilename(artifactName);
-        const base64 = normalizeBase64(inline.data);
-        if (!base64) return;
-        setPrefetchedArtifacts((prev) => ({
-          ...prev,
-          [artifactName]: { data: base64, mimeType },
-        }));
-      } catch {
-        // Prefetch best-effort; download will retry via GET if needed
-      }
-    },
-    [apiBase],
-  );
-
-  const downloadArtifact = useCallback(
-    async (artifactName: string, version: number, filename: string, key: 'pptx' | 'pdf') => {
-      setDownloading((prev) => ({ ...prev, [key]: true }));
-      try {
-        const prefetched = prefetchedArtifacts[artifactName];
-        let base64: string;
-        let mimeType: string;
-        if (prefetched?.data) {
-          base64 = prefetched.data;
-          mimeType = prefetched.mimeType;
-        } else {
-          if (!sessionId) {
-            setError('No session ID found for download.');
-            return;
-          }
-          const res = await fetch(
-            `${apiBase}/apps/${APP_NAME}/users/${USER_ID}/sessions/${sessionId}/artifacts/${encodeURIComponent(artifactName)}/versions/${version}`,
-          );
-          if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Artifact fetch failed: ${res.status} ${text}`);
-          }
-          const json = (await res.json()) as Record<string, unknown>;
-          const inline = getInlineData(json);
-          if (!inline?.data) {
-            throw new Error('Artifact missing inlineData.');
-          }
-          mimeType = inline.mimeType || inferMimeTypeFromFilename(filename);
-          base64 = normalizeBase64(inline.data);
-          if (!base64) {
-            throw new Error('Artifact data was empty.');
-          }
-        }
-        let url: string | null = null;
-        try {
-          const blob = base64ToBlob(base64, mimeType);
-          url = URL.createObjectURL(blob);
-        } catch {
-          url = formatBase64Data(base64, mimeType);
-        }
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        if (url?.startsWith('blob:')) {
-          setTimeout(() => URL.revokeObjectURL(url as string), 1000);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setDownloading((prev) => ({ ...prev, [key]: false }));
-      }
-    },
-    [apiBase, sessionId, prefetchedArtifacts],
-  );
-
   const runReport = useCallback(async () => {
     if (files.length === 0) {
       setError('Please select at least one file.');
@@ -367,8 +309,6 @@ export default function ReportAgentPage() {
     }
     setError(null);
     setSteps([]);
-    setArtifacts({});
-    setPrefetchedArtifacts({});
     setStreamWarning(null);
     setCurrentStep(null);
     setProgress({});
@@ -386,7 +326,7 @@ export default function ReportAgentPage() {
     try {
       let sawArtifacts = false;
       const sessionRes = await fetch(
-        `${apiBase}/apps/${APP_NAME}/users/${USER_ID}/sessions/${sid}`,
+        `${apiBase}/apps/${APP_NAME}/users/${encodedUserId}/sessions/${sid}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -410,7 +350,7 @@ export default function ReportAgentPage() {
 
       const runBody = {
         appName: APP_NAME,
-        userId: USER_ID,
+        userId: userId,
         sessionId: sid,
         newMessage: {
           role: 'user',
@@ -478,9 +418,7 @@ export default function ReportAgentPage() {
             const stateDelta = actions.stateDelta ?? actions.state_delta;
             const normalizedEvent = {
               content: event.content,
-              actions: {
-                stateDelta,
-              },
+              actions: { stateDelta },
             };
             const { summary, truncated } = extractEventSummary(normalizedEvent);
             if (summary || author) {
@@ -518,19 +456,6 @@ export default function ReportAgentPage() {
               const pdfVersion = coerceVersion(delta['financial_report.pdf']);
               if (pptxVersion != null || pdfVersion != null) {
                 sawArtifacts = true;
-                setArtifacts((prev) => ({
-                  ...prev,
-                  ...(pptxVersion != null ? { pptxVersion } : {}),
-                  ...(pdfVersion != null ? { pdfVersion } : {}),
-                }));
-              }
-              // Eager prefetch: GET each artifact now while the Cloud Run instance is still warm.
-              // The stream only sends name+version; actual content is from ADK artifact API.
-              for (const [name, rawVersion] of Object.entries(delta)) {
-                const version = coerceVersion(rawVersion);
-                if (version != null && typeof name === 'string') {
-                  prefetchArtifact(sid, name, version);
-                }
               }
             }
           } catch {
@@ -550,7 +475,7 @@ export default function ReportAgentPage() {
     } finally {
       setRunning(false);
     }
-  }, [files, apiBase, enqueueStep, flushPendingSteps, prefetchArtifact]);
+  }, [files, apiBase, encodedUserId, enqueueStep, flushPendingSteps, userId]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = e.target.files ? Array.from(e.target.files) : [];
@@ -561,7 +486,6 @@ export default function ReportAgentPage() {
       return [...prev, ...unique];
     });
     setError(null);
-    // Reset the input so re-selecting the same file triggers onChange
     e.target.value = '';
   }, []);
 
@@ -707,7 +631,7 @@ export default function ReportAgentPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
             </svg>
             <p className="text-sm font-medium text-[#958b5e] dark:text-[#C4B682]">
-              Your report is being generated. Please keep this page open until it's finished. You can continue working in other tabs or open another Elixir window.
+              Your report is being generated. You can safely close this page — it will continue running in the background and appear in your history when complete.
             </p>
           </div>
         )}
@@ -827,42 +751,155 @@ export default function ReportAgentPage() {
           </div>
         )}
 
-        {/* Download */}
-        {artifacts.pdfVersion != null && sessionId && (
-          <div className="overflow-hidden rounded-2xl border border-[#A89968]/30 bg-gradient-to-r from-[#A89968]/5 to-[#C4B682]/5 shadow-sm dark:border-[#A89968]/20 dark:from-[#A89968]/10 dark:to-[#C4B682]/10">
-            <div className="flex items-center justify-between p-6">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#A89968]/15 dark:bg-[#A89968]/25">
-                  <svg className="h-6 w-6 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25" />
-                  </svg>
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Report Ready</h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Your financial report has been generated</p>
-                </div>
-              </div>
+        {/* Report History */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-gray-700/80 dark:bg-gray-800/80">
+          <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-gray-700/50 dark:bg-gray-800/50">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Report History</h2>
               <button
                 type="button"
-                onClick={() =>
-                  downloadArtifact(
-                    'financial_report.pdf',
-                    artifacts.pdfVersion as number,
-                    'financial_report.pdf',
-                    'pdf',
-                  )
-                }
-                disabled={downloading.pdf}
-                className="flex items-center gap-2 rounded-xl bg-[#A89968] px-6 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-[#958b5e] hover:shadow-md disabled:opacity-50 dark:bg-[#A89968] dark:hover:bg-[#958b5e]"
+                onClick={fetchHistory}
+                disabled={historyLoading || running}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-700/50 dark:hover:text-gray-200"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                <svg
+                  className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                 </svg>
-                {downloading.pdf ? 'Downloading...' : 'Download PDF'}
+                Refresh
               </button>
             </div>
           </div>
-        )}
+
+          <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+            {/* In-progress entry for the current run */}
+            {running && (
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Report generating…</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      {currentStep?.label ?? 'Initializing'}
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  In Progress
+                </span>
+              </div>
+            )}
+
+            {/* Failed entry for the most recent run */}
+            {!running && streamStatus === 'error' && (
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-2.5 w-2.5 flex-shrink-0 items-center justify-center">
+                    <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Generation failed</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">No report was saved</p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                  Failed
+                </span>
+              </div>
+            )}
+
+            {/* Historical runs from GCS */}
+            {history.length === 0 && !running ? (
+              <div className="px-6 py-10 text-center">
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  {historyLoading ? 'Loading…' : 'No reports generated yet.'}
+                </p>
+              </div>
+            ) : (
+              history.map((run) => {
+                const isCompleted = run.status === 'completed';
+                const isFailed = run.status === 'failed';
+                const isStaleInProgress = run.status === 'in_progress';
+                const pdfUrl = isCompleted && run.pdf_filename
+                  ? `${apiBase}/reports/${encodedUserId}/${encodeURIComponent(run.pdf_filename)}`
+                  : null;
+                return (
+                  <div key={run.run_id} className="flex items-center justify-between gap-4 px-6 py-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-2.5 w-2.5 flex-shrink-0 items-center justify-center">
+                        {isCompleted && <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />}
+                        {isFailed && <div className="h-2.5 w-2.5 rounded-full bg-red-400" />}
+                        {isStaleInProgress && (
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {run.title ?? formatReportDate(run.started_at)}
+                        </p>
+                        {run.title && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{formatReportDate(run.started_at)}</p>
+                        )}
+                        {isFailed && run.error && (
+                          <p className="mt-0.5 truncate text-xs text-red-400 dark:text-red-500" title={run.error}>
+                            {run.error}
+                          </p>
+                        )}
+                        {isStaleInProgress && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            {run.message ?? 'Starting...'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      {isCompleted && (
+                        <>
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            Completed
+                          </span>
+                          {pdfUrl && (
+                            <a
+                              href={pdfUrl}
+                              download
+                              className="flex items-center gap-1.5 rounded-lg bg-[#A89968] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#958b5e]"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                              </svg>
+                              PDF
+                            </a>
+                          )}
+                        </>
+                      )}
+                      {isFailed && (
+                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          Failed
+                        </span>
+                      )}
+                      {isStaleInProgress && (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                          In Progress
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
