@@ -56,4 +56,4 @@ gcloud run deploy "${SERVICE_NAME:-report-agents}" \
     --cpu=2 \
     --use-http2 \
     --timeout=2h \
-    --no-allow-unauthenticated
+    --allow-unauthenticated
