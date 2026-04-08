@@ -124,6 +124,7 @@ registration:
   # Only allow Infinity Capital email addresses to register
   allowedDomains:
     - "infinitycapital.bh"
+    - "alchemy-solutions.co"
 
 # Example Balance settings
 # balance:
