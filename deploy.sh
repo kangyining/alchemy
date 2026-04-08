@@ -40,6 +40,9 @@ ENV_VARS+=",GOOGLE_CLOUD_LOCATION=${VERTEX_AI_LOCATION:-global}"
 ENV_VARS+=",GOOGLE_GENAI_USE_VERTEXAI=$GOOGLE_GENAI_USE_VERTEXAI"
 ENV_VARS+=",DOCAI_LOCATION=$DOCAI_LOCATION"
 ENV_VARS+=",DOCAI_PROCESSOR_ID=$DOCAI_PROCESSOR_ID"
+if [[ -n "${REPORTS_BUCKET:-}" ]]; then
+    ENV_VARS+=",REPORTS_BUCKET=$REPORTS_BUCKET"
+fi
 
 echo "Deploying to Cloud Run with custom Dockerfile..."
 echo ""
@@ -52,5 +55,5 @@ gcloud run deploy "${SERVICE_NAME:-report-agents}" \
     --memory=4Gi \
     --cpu=2 \
     --use-http2 \
-    --timeout=60m \
+    --timeout=2h \
     --allow-unauthenticated
