@@ -22,6 +22,7 @@ from report_agents.sub_agents.cached_ingestion_agent import cached_ingestion_age
 from report_agents.sub_agents.ingestion_agent import ingestion_agent
 from report_agents.sub_agents.slide_agent_factory import create_slide_agents
 from report_agents.sub_agents.assembly_agent import assembly_agent
+from report_agents.sub_agents.status_agent import status_agent
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ sequential_slide_generation = SequentialAgent(
 root_agent = SequentialAgent(
     name="FinancialReportOrchestrator",
     sub_agents=[
+        status_agent,                   # Phase 0: Write in_progress status to GCS
         active_ingestion_agent,         # Phase 1: Parse documents (or load from cache)
         sequential_slide_generation,    # Phase 2: Generate slides sequentially
         assembly_agent,                 # Phase 3: Build PPTX + PDF (deterministic)
