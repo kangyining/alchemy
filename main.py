@@ -19,8 +19,9 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import Response, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from google.adk.cli.fast_api import get_fast_api_app
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,16 @@ def _port() -> int:
     return int(os.environ.get("PORT", "8000"))
 
 
+_API_KEY = os.environ.get("API_KEY", "")
+
+
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if _API_KEY and request.headers.get("X-API-Key") != _API_KEY:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        return await call_next(request)
+
+
 app = get_fast_api_app(
     agents_dir=_agents_dir(),
     web=False,
@@ -42,6 +53,7 @@ app = get_fast_api_app(
     a2a=os.environ.get("ADK_A2A", "").lower() in ("1", "true", "yes"),
     reload_agents=os.environ.get("ADK_RELOAD_AGENTS", "").lower() in ("1", "true", "yes"),
 )
+app.add_middleware(APIKeyMiddleware)
 
 
 def _fail_all_in_progress() -> None:
