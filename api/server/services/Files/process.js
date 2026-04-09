@@ -35,6 +35,7 @@ const { LB_QueueAsyncCall } = require('~/server/utils/queue');
 const { getStrategyFunctions } = require('./strategies');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
+const db = require('~/models');
 
 /**
  * Creates a modular file upload wrapper that ensures filename sanitization
