@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and credentials
+.env
+service-account.json
+*.json.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output files
+output/
+*.pptx
+*.pdf
+
+# ADK
+*.db
+.adk/
+
+# Test artifacts
+sample_data/
