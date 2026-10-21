@@ -1,0 +1,55 @@
+{
+  "repository": "kangyining/alchemy",
+  "imported_on": "2026-10-21",
+  "sources": [
+    {
+      "repository": "lynx-canadensis/LibreChat-private",
+      "directory": "apps/librechat",
+      "default_branch": "main",
+      "commit": "816ec0f6fd73ef88e804e2b0a7d16d40432e3afc",
+      "tree": "bf0666e470cdcf7ebd2a3eff03c709c29ece5a6c",
+      "commits_across_all_refs": 4082,
+      "preserved_refs": {
+        "refs/heads/NR": "refs/heads/archive/librechat/NR",
+        "refs/heads/NT": "refs/heads/archive/librechat/NT",
+        "refs/heads/branding": "refs/heads/archive/librechat/branding",
+        "refs/heads/feat/report-history": "refs/heads/archive/librechat/feat/report-history",
+        "refs/heads/main": "refs/heads/archive/librechat/main",
+        "refs/heads/main-apr5-backup": "refs/heads/archive/librechat/main-apr5-backup",
+        "refs/heads/pdf-mcp": "refs/heads/archive/librechat/pdf-mcp",
+        "refs/heads/rebase/upstream-latest": "refs/heads/archive/librechat/rebase/upstream-latest",
+        "refs/heads/report-adk": "refs/heads/archive/librechat/report-adk",
+        "refs/heads/ryan/prefetch": "refs/heads/archive/librechat/ryan/prefetch"
+      }
+    },
+    {
+      "repository": "lynx-canadensis/alchemy-infra",
+      "directory": "infra/aws",
+      "default_branch": "main",
+      "commit": "bfd69f982a4b7c574340f7d4e8cbcf18275d290d",
+      "tree": "94d9d3ada687e75105622d6b01291d0afe2f10d1",
+      "commits_across_all_refs": 6,
+      "preserved_refs": {
+        "refs/heads/main": "refs/heads/archive/alchemy-infra/main"
+      }
+    },
+    {
+      "repository": "lynx-canadensis/report-agents",
+      "directory": "services/report-agents",
+      "default_branch": "main",
+      "commit": "28933ed27c2f53fdaf0a674a748fa8f4eefdb517",
+      "tree": "880b0f8db518d2d4701ae99a07b005863e7e0641",
+      "commits_across_all_refs": 70,
+      "preserved_refs": {
+        "refs/heads/gcs-report-storage": "refs/heads/archive/report-agents/gcs-report-storage",
+        "refs/heads/main": "refs/heads/archive/report-agents/main",
+        "refs/heads/optimize-adk-codebase-8423868799063862682": "refs/heads/archive/report-agents/optimize-adk-codebase-8423868799063862682",
+        "refs/heads/phase1_final": "refs/heads/archive/report-agents/phase1_final",
+        "refs/heads/ryan-fix-32mb": "refs/heads/archive/report-agents/ryan-fix-32mb",
+        "refs/heads/ryan/gcp-deploy": "refs/heads/archive/report-agents/ryan/gcp-deploy",
+        "refs/heads/ryan/vertex-loc": "refs/heads/archive/report-agents/ryan/vertex-loc",
+        "refs/heads/timeout-to-1h": "refs/heads/archive/report-agents/timeout-to-1h"
+      }
+    }
+  ]
+}
