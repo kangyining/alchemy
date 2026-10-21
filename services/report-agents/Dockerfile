@@ -32,6 +32,8 @@ RUN uv export --no-hashes --no-emit-project > requirements.txt && \
 # Copy application code
 COPY report_agents/ ./report_agents/
 COPY main.py ./
+COPY access.py ./
+COPY routes.py ./
 
 # Set environment variables
 ENV PORT=8080

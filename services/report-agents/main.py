@@ -19,9 +19,9 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import HTTPException, Request
-from fastapi.responses import Response, JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import HTTPException
+from access import ReportAccessMiddleware
+from routes import install_report_routes
 from google.adk.cli.fast_api import get_fast_api_app
 
 logger = logging.getLogger(__name__)
@@ -35,16 +35,6 @@ def _port() -> int:
     return int(os.environ.get("PORT", "8000"))
 
 
-_API_KEY = os.environ.get("API_KEY", "")
-
-
-class APIKeyMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if _API_KEY and request.headers.get("X-API-Key") != _API_KEY:
-            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-        return await call_next(request)
-
-
 app = get_fast_api_app(
     agents_dir=_agents_dir(),
     web=False,
@@ -53,11 +43,11 @@ app = get_fast_api_app(
     a2a=os.environ.get("ADK_A2A", "").lower() in ("1", "true", "yes"),
     reload_agents=os.environ.get("ADK_RELOAD_AGENTS", "").lower() in ("1", "true", "yes"),
 )
-app.add_middleware(APIKeyMiddleware)
+app.add_middleware(ReportAccessMiddleware)
 
 
 def _fail_all_in_progress() -> None:
-    """Mark all in_progress runs as failed — called on SIGTERM before shutdown."""
+    """Mark all in_progress runs as failed â€” called on SIGTERM before shutdown."""
     from report_agents.services.run_status import _cache, write_status
     now = datetime.now(timezone.utc).isoformat()
     for user_id, runs in _cache.items():
@@ -99,32 +89,9 @@ def _gcs_bucket():
     return _gcs_client.bucket(bucket_name)
 
 
-@app.get("/reports/{user_id}")
-async def list_reports(user_id: str):
-    """List all run status records for a user, newest first."""
+def _list_runs(user_id: str):
     from report_agents.services.run_status import list_runs
-    runs = list_runs(user_id)
-    return JSONResponse(content=runs)
+    return list_runs(user_id)
 
 
-@app.get("/reports/{user_id}/{filename}")
-async def download_report(user_id: str, filename: str):
-    """Download a specific report file."""
-    bucket = _gcs_bucket()
-    blob = bucket.blob(f"{user_id}/{filename}")
-    if not blob.exists():
-        raise HTTPException(status_code=404, detail="Report not found")
-
-    data = blob.download_as_bytes()
-    if filename.endswith(".pdf"):
-        media_type = "application/pdf"
-    elif filename.endswith(".pptx"):
-        media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    else:
-        media_type = "application/octet-stream"
-
-    return Response(
-        content=data,
-        media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+install_report_routes(app, _list_runs, _gcs_bucket)

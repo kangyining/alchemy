@@ -1,0 +1,65 @@
+name: Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, improve]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/librechat
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/librechat/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npx jest --config packages/api/jest.config.mjs --rootDir packages/api --runInBand --coverage=false --testPathPatterns reports.spec.ts
+      - run: npx eslint packages/api/src/reports.ts packages/api/src/reports.spec.ts api/server/index.js client/src/components/ReportAgent/ReportAgentPage.tsx
+      - run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - run: npx tsc --noEmit -p packages/api/tsconfig.build.json
+  reports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r services/report-agents/requirements-test.txt
+      - run: python -m unittest discover -s services/report-agents/tests -v
+  infrastructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/aws
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: infra/aws/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm test -- --runInBand

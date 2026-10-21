@@ -6,7 +6,7 @@
       "repository": "lynx-canadensis/LibreChat-private",
       "directory": "apps/librechat",
       "default_branch": "main",
-      "commit": "816ec0f6fd73ef88e804e2b0a7d16d40432e3afc",
+      "commit": "4765cc7e7cdb8a87596f002e25be307af7e46dd3",
       "tree": "bf0666e470cdcf7ebd2a3eff03c709c29ece5a6c",
       "commits_across_all_refs": 4082,
       "preserved_refs": {
@@ -37,8 +37,8 @@
       "repository": "lynx-canadensis/report-agents",
       "directory": "services/report-agents",
       "default_branch": "main",
-      "commit": "28933ed27c2f53fdaf0a674a748fa8f4eefdb517",
-      "tree": "880b0f8db518d2d4701ae99a07b005863e7e0641",
+      "commit": "32f4696c98257871325ab687f279f8faa3f60b7f",
+      "tree": "a189413329c55cd505cf22781df70c1e226b37c7",
       "commits_across_all_refs": 70,
       "preserved_refs": {
         "refs/heads/gcs-report-storage": "refs/heads/archive/report-agents/gcs-report-storage",
@@ -51,5 +51,20 @@
         "refs/heads/timeout-to-1h": "refs/heads/archive/report-agents/timeout-to-1h"
       }
     }
+  ],
+  "history_sanitized_on": "2026-10-21",
+  "history_note": "Runtime data removed from all shared refs; authors and dates retained, commit IDs rewritten. Full originals backed up locally.",
+  "removed_paths": [
+    "report_agents/.adk",
+    "report_agents/.adk/session.db",
+    "services/report-agents/.cache",
+    "services/report-agents/.cache/ingestion_cache.pkl",
+    "services/report-agents/tests/.adk",
+    "services/report-agents/tests/.adk/session.db",
+    "tests/.adk",
+    "tests/.adk/session.db"
+  ],
+  "removed_globs": [
+    "*ingestion_cache.pkl"
   ]
 }

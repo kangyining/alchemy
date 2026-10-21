@@ -10,3 +10,9 @@ __pycache__/
 .cache/
 .adk/
 cdk.out/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.pkl
+*.log

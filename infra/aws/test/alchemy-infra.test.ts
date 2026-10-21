@@ -1,17 +1,19 @@
-// import * as cdk from 'aws-cdk-lib/core';
-// import { Template } from 'aws-cdk-lib/assertions';
-// import * as AlchemyInfra from '../lib/alchemy-infra-stack';
+import * as cdk from 'aws-cdk-lib';
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import { AlchemyInfraStack } from '../lib/alchemy-infra-stack';
 
-// example test. To run these tests, uncomment this file along with the
-// example resource in lib/alchemy-infra-stack.ts
-test('SQS Queue Created', () => {
-//   const app = new cdk.App();
-//     // WHEN
-//   const stack = new AlchemyInfra.AlchemyInfraStack(app, 'MyTestStack');
-//     // THEN
-//   const template = Template.fromStack(stack);
-
-//   template.hasResourceProperties('AWS::SQS::Queue', {
-//     VisibilityTimeout: 300
-//   });
+test('chat host uses the monorepo checkout and encrypted storage', () => {
+  const template = Template.fromStack(new AlchemyInfraStack(new cdk.App(), 'TestStack'));
+  template.resourceCountIs('AWS::EC2::Instance', 1);
+  template.resourceCountIs('AWS::EC2::NatGateway', 0);
+  template.hasResourceProperties('AWS::EC2::Instance', {
+    InstanceType: 't4g.large',
+    BlockDeviceMappings: Match.arrayWith([Match.objectLike({
+      Ebs: Match.objectLike({ Encrypted: true, VolumeType: 'gp3' }),
+    })]),
+  });
+  const content = JSON.stringify(template.toJSON());
+  expect(content).toContain('github.com/kangyining/alchemy.git');
+  expect(content).toContain('WorkingDirectory=/opt/alchemy/apps/librechat');
+  expect(content).not.toContain('github.com//lynx-canadensis/LibreChat.git');
 });

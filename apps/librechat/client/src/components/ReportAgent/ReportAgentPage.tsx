@@ -1,26 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useRecoilValue } from 'recoil';
-import store from '~/store';
+import { useAuthContext, useLocalize } from '~/hooks';
 
 const APP_NAME = 'report_agents';
-
-/** Base URL for report agent ADK. Uses same-origin /report-agent-api (server proxies to REPORT_AGENT_URL). Override with VITE_REPORT_AGENT_URL if needed. */
-function getReportAgentBaseUrl(): string {
-  const env = import.meta.env.VITE_REPORT_AGENT_URL;
-  if (env && typeof env === 'string' && env.trim() !== '') {
-    return env.trim().replace(/\/$/, '');
-  }
-  return ''; // same origin → /report-agent-api (proxied by server to REPORT_AGENT_URL)
-}
-
-/** Base URL for report-agent API: env override or same-origin /report-agent-api. */
-function getReportAgentApiBase(): string {
-  const base = getReportAgentBaseUrl();
-  if (base) {
-    return base;
-  }
-  return '/report-agent-api';
-}
 
 type Step = {
   author: string;
@@ -57,7 +38,16 @@ function summarizeStateDelta(state: unknown): string {
   if (typeof state === 'string') return state;
   if (typeof state !== 'object') return String(state);
   const obj = state as Record<string, unknown>;
-  const preferredKeys = ['status', 'step', 'phase', 'message', 'detail', 'progress', 'current', 'label'];
+  const preferredKeys = [
+    'status',
+    'step',
+    'phase',
+    'message',
+    'detail',
+    'progress',
+    'current',
+    'label',
+  ];
   const parts: string[] = [];
   for (const key of preferredKeys) {
     const value = obj[key];
@@ -83,7 +73,9 @@ function extractEventSummary(event: {
   content?: { parts?: Array<{ text?: string }> };
   actions?: { stateDelta?: Record<string, unknown> };
 }): { summary: string; truncated: boolean } {
-  const textParts = event.content?.parts?.map((p) => p.text).filter(Boolean) as string[] | undefined;
+  const textParts = event.content?.parts?.map((p) => p.text).filter(Boolean) as
+    | string[]
+    | undefined;
   if (textParts && textParts.length > 0) {
     const { text, truncated } = truncateText(textParts.join(' '));
     return { summary: text, truncated };
@@ -105,7 +97,11 @@ function coerceVersion(value: unknown): number | null {
   return null;
 }
 
-function getAuthorMeta(author: string): { label: string; isThrottle: boolean; slideNumber?: number } {
+function getAuthorMeta(author: string): {
+  label: string;
+  isThrottle: boolean;
+  slideNumber?: number;
+} {
   if (!author) return { label: 'Unknown', isThrottle: false };
   if (author === 'IngestionAgent') return { label: 'Parsing Documents', isThrottle: false };
   if (author === 'ReportAssemblyAgent') return { label: 'Assembling Report', isThrottle: false };
@@ -123,9 +119,19 @@ function getAuthorMeta(author: string): { label: string; isThrottle: boolean; sl
   return { label: author, isThrottle: false };
 }
 
-function extractProgressFromStateDelta(state?: Record<string, unknown>): { current?: number; total?: number } {
+function extractProgressFromStateDelta(state?: Record<string, unknown>): {
+  current?: number;
+  total?: number;
+} {
   if (!state) return {};
-  const totals = ['total_slides', 'slides_total', 'slide_total', 'slide_count', 'num_slides', 'slides'];
+  const totals = [
+    'total_slides',
+    'slides_total',
+    'slide_total',
+    'slide_count',
+    'num_slides',
+    'slides',
+  ];
   const currents = ['slides_generated', 'slide', 'slide_index', 'current_slide', 'current'];
   const pickNumber = (keys: string[]) => {
     for (const key of keys) {
@@ -173,22 +179,37 @@ function formatReportDate(iso: string): string {
   }
 }
 
-function formatFileSize(bytes: number | undefined): string {
-  if (!bytes) return '';
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export default function ReportAgentPage() {
-  const currentUser = useRecoilValue(store.user);
-  const rawUserId = currentUser?.email ?? currentUser?.username ?? currentUser?.id ?? 'anonymous';
-  const userId = rawUserId.replace('@', '_');
-  const encodedUserId = encodeURIComponent(userId);
+  const localize = useLocalize();
+  const { token } = useAuthContext();
+  const userId = 'me';
+  const encodedUserId = 'me';
+  const reportFetch = useCallback(
+    (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      headers.set('Authorization', `Bearer ${token ?? ''}`);
+      return fetch(url, { ...init, headers });
+    },
+    [token],
+  );
+  const downloadReport = async (url: string, filename: string) => {
+    try {
+      const response = await reportFetch(url);
+      if (!response.ok) throw new Error(response.statusText);
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    }
+  };
   const [files, setFiles] = useState<File[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>('idle');
   const [streamWarning, setStreamWarning] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<{ label: string; summary?: string } | null>(null);
@@ -209,7 +230,7 @@ export default function ReportAgentPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [running]);
 
-  const apiBase = getReportAgentApiBase();
+  const apiBase = '/report-agent-api';
   const visibleSteps = steps.filter((step) => !step.isThrottle);
   const progressPercent =
     progress.total && progress.current
@@ -219,7 +240,7 @@ export default function ReportAgentPage() {
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const res = await fetch(`${apiBase}/reports/${encodedUserId}`);
+      const res = await reportFetch(`${apiBase}/reports/${encodedUserId}`);
       if (res.ok) {
         const data = (await res.json()) as HistoryReport[];
         setHistory(data);
@@ -229,7 +250,7 @@ export default function ReportAgentPage() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [apiBase, encodedUserId]);
+  }, [apiBase, encodedUserId, reportFetch]);
 
   // Load history on mount
   useEffect(() => {
@@ -274,8 +295,10 @@ export default function ReportAgentPage() {
   const getMimeType = (file: File): string => {
     const map: Record<string, string> = {
       'application/pdf': 'application/pdf',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/csv': 'text/csv',
     };
     return map[file.type] || file.type || 'application/octet-stream';
@@ -321,11 +344,10 @@ export default function ReportAgentPage() {
     setRunning(true);
     hasStreamedRef.current = false;
     const sid = crypto.randomUUID();
-    setSessionId(sid);
 
     try {
       let sawArtifacts = false;
-      const sessionRes = await fetch(
+      const sessionRes = await reportFetch(
         `${apiBase}/apps/${APP_NAME}/users/${encodedUserId}/sessions/${sid}`,
         {
           method: 'POST',
@@ -362,7 +384,7 @@ export default function ReportAgentPage() {
         streaming: true,
       };
 
-      const runRes = await fetch(`${apiBase}/run_sse`, {
+      const runRes = await reportFetch(`${apiBase}/run_sse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -466,7 +488,9 @@ export default function ReportAgentPage() {
       flushPendingSteps();
       setStreamStatus((prev) => (prev === 'error' ? prev : 'done'));
       if (!sawArtifacts && hasStreamedRef.current) {
-        setStreamWarning('Stream ended without artifacts. The run may have failed or the backend did not save outputs.');
+        setStreamWarning(
+          'Stream ended without artifacts. The run may have failed or the backend did not save outputs.',
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -475,7 +499,7 @@ export default function ReportAgentPage() {
     } finally {
       setRunning(false);
     }
-  }, [files, apiBase, encodedUserId, enqueueStep, flushPendingSteps, userId]);
+  }, [files, apiBase, encodedUserId, enqueueStep, flushPendingSteps, userId, reportFetch]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = e.target.files ? Array.from(e.target.files) : [];
@@ -494,31 +518,45 @@ export default function ReportAgentPage() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col overflow-auto bg-gradient-to-b from-gray-50 to-white p-6 md:p-10 dark:from-gray-900 dark:to-gray-950">
+    <div className="flex h-full flex-col overflow-auto bg-gradient-to-b from-gray-50 to-white p-6 dark:from-gray-900 dark:to-gray-950 md:p-10">
       <div className="mx-auto w-full max-w-2xl space-y-8">
         {/* Header */}
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#A89968]/10 dark:bg-[#A89968]/20">
-              <svg className="h-5 w-5 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              <svg
+                className="h-5 w-5 text-[#A89968]"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                />
               </svg>
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">
-              Financial Report Generation
+              {localize('com_ui_report_financial_report_generation')}
             </h1>
           </div>
           <p className="text-base leading-relaxed text-gray-500 dark:text-gray-400">
-            Upload your documents and we'll generate a comprehensive financial report in PDF format.
+            {localize(
+              'com_ui_report_upload_your_documents_and_we_ll_generate_a_comprehensive_financial_report_in_pdf_format',
+            )}
           </p>
         </div>
 
         {/* Upload Card */}
         <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700/80 dark:bg-gray-800/80">
           <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-gray-700/50 dark:bg-gray-800/50">
-            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Upload Documents</h2>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+              {localize('com_ui_report_upload_documents')}
+            </h2>
             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-              Supported: PDF, DOCX, XLSX, CSV, PPTX
+              {localize('com_ui_report_supported_pdf_docx_xlsx_csv_pptx')}
             </p>
           </div>
           <div className="space-y-4 p-6">
@@ -530,8 +568,18 @@ export default function ReportAgentPage() {
               }`}
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#A89968]/10 dark:bg-[#A89968]/20">
-                <svg className="h-6 w-6 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                <svg
+                  className="h-6 w-6 text-[#A89968]"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+                  />
                 </svg>
               </div>
               <div className="text-center">
@@ -540,7 +588,7 @@ export default function ReportAgentPage() {
                 </span>
                 {files.length === 0 && (
                   <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">
-                    Select one or more files at a time
+                    {localize('com_ui_report_select_one_or_more_files_at_a_time')}
                   </p>
                 )}
               </div>
@@ -558,7 +606,8 @@ export default function ReportAgentPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {files.length} file{files.length > 1 ? 's' : ''} selected
+                    {files.length} {localize('com_ui_report_file')}
+                    {files.length > 1 ? 's' : ''} {localize('com_ui_report_selected')}
                   </span>
                   {!running && files.length > 1 && (
                     <button
@@ -566,7 +615,7 @@ export default function ReportAgentPage() {
                       onClick={() => setFiles([])}
                       className="text-sm font-medium text-red-500 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
-                      Remove all
+                      {localize('com_ui_report_remove_all')}
                     </button>
                   )}
                 </div>
@@ -576,8 +625,18 @@ export default function ReportAgentPage() {
                       key={f.name}
                       className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
                     >
-                      <svg className="h-4 w-4 flex-shrink-0 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                      <svg
+                        className="h-4 w-4 flex-shrink-0 text-[#A89968]"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.5}
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                        />
                       </svg>
                       <span className="max-w-[200px] truncate">{f.name}</span>
                       {!running && (
@@ -587,8 +646,18 @@ export default function ReportAgentPage() {
                           className="ml-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-200"
                           title={`Remove ${f.name}`}
                         >
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          <svg
+                            className="h-3 w-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2}
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M6 18 18 6M6 6l12 12"
+                            />
                           </svg>
                         </button>
                       )}
@@ -607,17 +676,38 @@ export default function ReportAgentPage() {
               {running ? (
                 <>
                   <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
                   </svg>
-                  Generating Report...
+                  {localize('com_ui_report_generating_report')}
                 </>
               ) : (
                 <>
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
+                    />
                   </svg>
-                  Generate Report
+                  {localize('com_ui_report_generate_report')}
                 </>
               )}
             </button>
@@ -627,11 +717,23 @@ export default function ReportAgentPage() {
         {/* Stay on page warning */}
         {running && (
           <div className="flex items-center gap-3 rounded-2xl border border-[#A89968]/30 bg-[#A89968]/5 px-5 py-3 dark:border-[#A89968]/20 dark:bg-[#A89968]/10">
-            <svg className="h-5 w-5 flex-shrink-0 text-[#A89968]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            <svg
+              className="h-5 w-5 flex-shrink-0 text-[#A89968]"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+              />
             </svg>
             <p className="text-sm font-medium text-[#958b5e] dark:text-[#C4B682]">
-              Your report is being generated. You can safely close this page — it will continue running in the background and appear in your history when complete.
+              {localize(
+                'com_ui_report_your_report_is_being_generated_you_can_safely_close_this_page_it_will_continue_running_in_',
+              )}
             </p>
           </div>
         )}
@@ -640,8 +742,18 @@ export default function ReportAgentPage() {
         {error && (
           <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 dark:border-red-800/50 dark:bg-red-900/20">
             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40">
-              <svg className="h-4 w-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              <svg
+                className="h-4 w-4 text-red-600 dark:text-red-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
+                />
               </svg>
             </div>
             <div className="flex-1">
@@ -652,7 +764,7 @@ export default function ReportAgentPage() {
                   onClick={runReport}
                   className="mt-3 rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600"
                 >
-                  Retry
+                  {localize('com_ui_report_retry')}
                 </button>
               )}
             </div>
@@ -663,8 +775,18 @@ export default function ReportAgentPage() {
         {streamWarning && !error && (
           <div className="flex items-start gap-3 rounded-2xl border border-yellow-200 bg-yellow-50 p-5 dark:border-yellow-800/50 dark:bg-yellow-900/20">
             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/40">
-              <svg className="h-4 w-4 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              <svg
+                className="h-4 w-4 text-yellow-600 dark:text-yellow-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
+                />
               </svg>
             </div>
             <p className="text-base text-yellow-800 dark:text-yellow-300">{streamWarning}</p>
@@ -683,15 +805,18 @@ export default function ReportAgentPage() {
                       <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#A89968]" />
                     </span>
                   )}
-                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Progress</h2>
+                  <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+                    {localize('com_ui_report_progress')}
+                  </h2>
                 </div>
                 {progress.total ? (
                   <span className="rounded-full bg-[#A89968]/10 px-3 py-1 text-sm font-medium text-[#A89968] dark:bg-[#A89968]/20">
-                    {progress.current ?? 0} / {progress.total} slides
+                    {progress.current ?? 0} / {progress.total} {localize('com_ui_report_slides')}
                   </span>
-                ) : progress.current ? (
+                ) : null}
+                {!progress.total && progress.current ? (
                   <span className="rounded-full bg-[#A89968]/10 px-3 py-1 text-sm font-medium text-[#A89968] dark:bg-[#A89968]/20">
-                    Slide {progress.current}
+                    {localize('com_ui_report_slide')} {progress.current}
                   </span>
                 ) : null}
               </div>
@@ -700,7 +825,9 @@ export default function ReportAgentPage() {
               {/* Current step */}
               <div className="mb-4 space-y-3">
                 <div className="flex items-center gap-2 text-base">
-                  <span className="text-gray-500 dark:text-gray-400">Current:</span>
+                  <span className="text-gray-500 dark:text-gray-400">
+                    {localize('com_ui_report_current')}
+                  </span>
                   <span className="font-semibold text-gray-900 dark:text-gray-100">
                     {currentStep?.label ?? (running ? 'Initializing...' : '—')}
                   </span>
@@ -711,14 +838,17 @@ export default function ReportAgentPage() {
                       className="h-full rounded-full bg-gradient-to-r from-[#A89968] to-[#C4B682] transition-all duration-500 ease-out"
                       style={{ width: `${progressPercent}%` }}
                     />
-                  ) : running ? (
+                  ) : null}
+                  {progressPercent == null && running ? (
                     <div className="h-full w-full overflow-hidden rounded-full">
                       <div className="h-full w-full animate-pulse bg-gradient-to-r from-[#A89968]/40 via-[#A89968]/70 to-[#A89968]/40" />
                     </div>
                   ) : null}
                 </div>
                 {currentStep?.summary && (
-                  <p className="text-sm italic text-gray-500 dark:text-gray-400">{currentStep.summary}</p>
+                  <p className="text-sm italic text-gray-500 dark:text-gray-400">
+                    {currentStep.summary}
+                  </p>
                 )}
               </div>
               {/* Steps timeline */}
@@ -728,17 +858,22 @@ export default function ReportAgentPage() {
                     {visibleSteps.map((s, i) => (
                       <li key={i} className="flex items-start gap-3">
                         <div className="mt-1.5 flex h-5 w-5 flex-shrink-0 items-center justify-center">
-                          <div className={`h-2 w-2 rounded-full ${
-                            i === visibleSteps.length - 1 && running
-                              ? 'animate-pulse bg-[#A89968]'
-                              : 'bg-[#A89968]/40'
-                          }`} />
+                          <div
+                            className={`h-2 w-2 rounded-full ${
+                              i === visibleSteps.length - 1 && running
+                                ? 'animate-pulse bg-[#A89968]'
+                                : 'bg-[#A89968]/40'
+                            }`}
+                          />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <span className="text-base font-medium text-gray-800 dark:text-gray-200">{s.label}</span>
+                          <span className="text-base font-medium text-gray-800 dark:text-gray-200">
+                            {s.label}
+                          </span>
                           {s.summary && (
                             <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">
-                              {s.summary}{s.truncated ? '...' : ''}
+                              {s.summary}
+                              {s.truncated ? '...' : ''}
                             </p>
                           )}
                         </div>
@@ -755,7 +890,9 @@ export default function ReportAgentPage() {
         <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-gray-700/80 dark:bg-gray-800/80">
           <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 dark:border-gray-700/50 dark:bg-gray-800/50">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">Report History</h2>
+              <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+                {localize('com_ui_report_report_history')}
+              </h2>
               <button
                 type="button"
                 onClick={fetchHistory}
@@ -769,9 +906,13 @@ export default function ReportAgentPage() {
                   strokeWidth={1.5}
                   stroke="currentColor"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+                  />
                 </svg>
-                Refresh
+                {localize('com_ui_report_refresh')}
               </button>
             </div>
           </div>
@@ -786,14 +927,16 @@ export default function ReportAgentPage() {
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
                   </span>
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Report generating…</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {localize('com_ui_report_report_generating')}
+                    </p>
                     <p className="text-xs text-gray-400 dark:text-gray-500">
                       {currentStep?.label ?? 'Initializing'}
                     </p>
                   </div>
                 </div>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                  In Progress
+                  {localize('com_ui_report_in_progress')}
                 </span>
               </div>
             )}
@@ -806,12 +949,16 @@ export default function ReportAgentPage() {
                     <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Generation failed</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">No report was saved</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {localize('com_ui_report_generation_failed')}
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      {localize('com_ui_report_no_report_was_saved')}
+                    </p>
                   </div>
                 </div>
                 <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                  Failed
+                  {localize('com_ui_report_failed')}
                 </span>
               </div>
             )}
@@ -828,12 +975,16 @@ export default function ReportAgentPage() {
                 const isCompleted = run.status === 'completed';
                 const isFailed = run.status === 'failed';
                 const isStaleInProgress = run.status === 'in_progress';
-                const pdfUrl = isCompleted && run.pdf_filename
-                  ? `${apiBase}/reports/${encodedUserId}/${encodeURIComponent(run.pdf_filename)}`
-                  : null;
+                const pdfUrl =
+                  isCompleted && run.pdf_filename
+                    ? `${apiBase}/reports/${encodedUserId}/${encodeURIComponent(run.pdf_filename)}`
+                    : null;
                 return (
-                  <div key={run.run_id} className="flex items-center justify-between gap-4 px-6 py-4">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    key={run.run_id}
+                    className="flex items-center justify-between gap-4 px-6 py-4"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-2.5 w-2.5 flex-shrink-0 items-center justify-center">
                         {isCompleted && <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />}
                         {isFailed && <div className="h-2.5 w-2.5 rounded-full bg-red-400" />}
@@ -849,10 +1000,15 @@ export default function ReportAgentPage() {
                           {run.title ?? formatReportDate(run.started_at)}
                         </p>
                         {run.title && (
-                          <p className="text-xs text-gray-400 dark:text-gray-500">{formatReportDate(run.started_at)}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            {formatReportDate(run.started_at)}
+                          </p>
                         )}
                         {isFailed && run.error && (
-                          <p className="mt-0.5 truncate text-xs text-red-400 dark:text-red-500" title={run.error}>
+                          <p
+                            className="mt-0.5 truncate text-xs text-red-400 dark:text-red-500"
+                            title={run.error}
+                          >
                             {run.error}
                           </p>
                         )}
@@ -867,30 +1023,43 @@ export default function ReportAgentPage() {
                       {isCompleted && (
                         <>
                           <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            Completed
+                            {localize('com_ui_report_completed')}
                           </span>
                           {pdfUrl && (
                             <a
                               href={pdfUrl}
-                              download
+                              onClick={(event) => {
+                                event.preventDefault();
+                                void downloadReport(pdfUrl, run.pdf_filename ?? 'report.pdf');
+                              }}
                               className="flex items-center gap-1.5 rounded-lg bg-[#A89968] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#958b5e]"
                             >
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={1.5}
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
+                                />
                               </svg>
-                              PDF
+                              {localize('com_ui_report_pdf')}
                             </a>
                           )}
                         </>
                       )}
                       {isFailed && (
                         <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                          Failed
+                          {localize('com_ui_report_failed')}
                         </span>
                       )}
                       {isStaleInProgress && (
                         <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                          In Progress
+                          {localize('com_ui_report_in_progress')}
                         </span>
                       )}
                     </div>

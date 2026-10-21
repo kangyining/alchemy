@@ -12,6 +12,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 const { logger, runAsSystem } = require('@librechat/data-schemas');
 const {
   isEnabled,
+  createReportProxy,
   apiNotFound,
   ErrorController,
   memoryDiagnostics,
@@ -35,6 +36,7 @@ const configureSocialLogins = require('./socialLogins');
 const { getAppConfig } = require('./services/Config');
 const { authJsonPath } = require('./services/Config/loadAsyncEndpoints');
 const staticCache = require('./utils/staticCache');
+const requireJwtAuth = require('./middleware/requireJwtAuth');
 const optionalJwtAuth = require('./middleware/optionalJwtAuth');
 const noIndex = require('./middleware/noIndex');
 const routes = require('./routes');
@@ -97,9 +99,7 @@ const startServer = async () => {
 
   /* Proxy /report-agent-api to the report agent ADK (app: report_agents; use run_sse to chat).
    * For Cloud Run (HTTPS), adds GCP ID token from api/data/auth.json (see loadAsyncEndpoints.authJsonPath).
-   * Placed before body parsers so raw body/SSE streams through. */
-  const http = require('http');
-  const https = require('https');
+   * Authenticated uploads use a bounded JSON parser; responses stream through. */
   const reportAgentTarget = process.env.REPORT_AGENT_URL;
   let reportAgentIdTokenClient = null;
   let reportAgentIdTokenAudience = null;
@@ -113,7 +113,10 @@ const startServer = async () => {
         reportAgentIdTokenClient = await auth.getIdTokenClient(audience);
         reportAgentIdTokenAudience = audience;
       }
-      return await reportAgentIdTokenClient.getRequestHeaders();
+      const headers = await reportAgentIdTokenClient.getRequestHeaders();
+      return typeof headers.get === 'function'
+        ? headers.get('authorization')
+        : (headers.Authorization ?? headers.authorization);
     } catch (err) {
       logger.error(
         '[report-agent-proxy] Failed to get GCP ID token:',
@@ -123,69 +126,19 @@ const startServer = async () => {
     }
   }
 
-  app.use('/report-agent-api', async (req, res) => {
-    if (!reportAgentTarget || String(reportAgentTarget).trim() === '') {
-      logger.error('[report-agent-proxy] REPORT_AGENT_URL is not set or empty');
-      res.status(503).json({
-        error: 'Report agent unavailable',
-        detail: 'REPORT_AGENT_URL is not configured. Set REPORT_AGENT_URL in your environment.',
-      });
-      return;
-    }
-    /* Disable timeouts for SSE streaming — report generation can take many minutes */
-    req.setTimeout(0);
-    res.setTimeout(0);
-    const parsed = new URL(reportAgentTarget);
-    const isHttps = parsed.protocol === 'https:';
-    const targetPath = req.originalUrl.replace(/^\/report-agent-api/, '') || '/';
-    const options = {
-      hostname: parsed.hostname,
-      port: parsed.port || (isHttps ? 443 : 80),
-      path: targetPath,
-      method: req.method,
-      headers: {
-        ...req.headers,
-        host: parsed.host,
-      },
-    };
-    if (isHttps) {
-      // Cloud Run expects audience to match the service URL (trailing slash can matter)
-      const audience =
-        reportAgentTarget.endsWith('/') ? reportAgentTarget : `${reportAgentTarget}/`;
-      const authHeaders = await getReportAgentBearerHeaders(audience);
-      if (!authHeaders) {
-        res.status(502).json({
-          error: 'Report agent unavailable',
-          detail: 'Failed to obtain GCP authentication token (api/data/auth.json).',
-        });
-        return;
-      }
-      options.headers = { ...options.headers, ...authHeaders };
-      if (process.env.REPORT_AGENT_API_KEY) {
-        options.headers['X-API-Key'] = process.env.REPORT_AGENT_API_KEY;
-      }
-      logger.info('[report-agent-proxy] Attached GCP ID token for Cloud Run', {
-        audience,
-        path: targetPath,
-      });
-    }
-    const request = isHttps ? https : http;
-    const proxyReq = request.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res, { end: true });
-    });
-    proxyReq.setTimeout(0);
-    proxyReq.on('error', (err) => {
-      const detail =
-        (err && (err.message || err.code || String(err))) || 'Unknown proxy error (no error object)';
-      const fullLog = err?.stack ? `${detail}\n${err.stack}` : detail;
-      logger.error(`[report-agent-proxy] Error: ${fullLog}`);
-      if (!res.headersSent) {
-        res.status(502).json({ error: 'Report agent unavailable', detail });
-      }
-    });
-    req.pipe(proxyReq, { end: true });
-  });
+  app.use(passport.initialize());
+  passport.use(jwtLogin());
+  passport.use(passportLogin());
+  app.use(
+    '/report-agent-api',
+    requireJwtAuth,
+    express.json({ limit: '50mb' }),
+    createReportProxy({
+      target: reportAgentTarget,
+      apiKey: process.env.REPORT_AGENT_API_KEY,
+      getAuthorization: getReportAgentBearerHeaders,
+    }),
+  );
 
   /* Middleware */
   app.use(noIndex);
@@ -223,11 +176,6 @@ const startServer = async () => {
   if (!ALLOW_SOCIAL_LOGIN) {
     console.warn('Social logins are disabled. Set ALLOW_SOCIAL_LOGIN=true to enable them.');
   }
-
-  /* OAUTH */
-  app.use(passport.initialize());
-  passport.use(jwtLogin());
-  passport.use(passportLogin());
 
   /* LDAP Auth */
   if (process.env.LDAP_URL && process.env.LDAP_USER_SEARCH_BASE) {

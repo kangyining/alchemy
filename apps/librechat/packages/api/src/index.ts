@@ -1,4 +1,5 @@
 export * from './app';
+export * from './reports';
 /* Admin */
 export * from './admin';
 export * from './cdn';

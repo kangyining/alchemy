@@ -25,6 +25,10 @@ else
     exit 1
 fi
 
+# Refuse a public service without the shared gateway secret.
+: "${API_KEY:?Set API_KEY before deployment}"
+: "${REPORTS_BUCKET:?Set REPORTS_BUCKET before deployment}"
+
 # Print configuration
 echo "=== Configuration ==="
 echo "GOOGLE_CLOUD_PROJECT: $GOOGLE_CLOUD_PROJECT"
