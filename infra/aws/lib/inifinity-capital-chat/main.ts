@@ -119,8 +119,10 @@ export class InfinityCapitalChat extends Construct {
       // -------------------------------------------
       // Clone the repository
       // -------------------------------------------
-      'git clone https://$TOKEN@github.com//lynx-canadensis/LibreChat.git /opt/librechat',
-      'cd /opt/librechat',
+      'git clone https://$TOKEN@github.com/kangyining/alchemy.git /opt/alchemy',
+      'git -C /opt/alchemy remote set-url origin https://github.com/kangyining/alchemy.git',
+      'unset TOKEN',
+      'cd /opt/alchemy/apps/librechat',
       'docker-compose pull',
 
       // -------------------------------------------
@@ -135,7 +137,7 @@ export class InfinityCapitalChat extends Construct {
       '[Service]',
       'Type=oneshot',
       'RemainAfterExit=yes',
-      'WorkingDirectory=/opt/librechat',
+      'WorkingDirectory=/opt/alchemy/apps/librechat',
       'ExecStart=/usr/bin/docker-compose up -d',
       'ExecStop=/usr/bin/docker-compose down',
       'ExecReload=/usr/bin/docker-compose pull && /usr/bin/docker-compose up -d',
@@ -256,8 +258,8 @@ export class InfinityCapitalChat extends Construct {
     });
 
     new cdk.CfnOutput(this, 'InfinityCapitalChatDockerComposeLocation', {
-      value: '/home/ec2-user/app',
-      description: 'Location where you should place your docker-compose.yml file',
+      value: '/opt/alchemy/apps/librechat',
+      description: 'LibreChat Docker Compose directory in the monorepo',
     });
   }
 }
